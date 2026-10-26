@@ -8,7 +8,8 @@
 
     /* live clock in the top bar */
     var clock=document.createElement('div');clock.className='bar-clock';
-    bar.insertBefore(clock,document.getElementById('fsToggleBtn')||document.getElementById('logoutBtn'));
+    var lo=document.getElementById('logoutBtn');
+    if(lo&&lo.parentNode===bar)bar.insertBefore(clock,lo);else bar.appendChild(clock);
     function tick(){var d=new Date();
       clock.innerHTML='<b>'+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'})+'</b><span>'+
         d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})+'</span>';}
@@ -45,52 +46,6 @@
       var i=e.key==='0'?9:parseInt(e.key,10)-1;
       if(i>=0&&navBtns[i]){e.preventDefault();navBtns[i].click();}
     });
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-})();
-
-/* Tables tab: live Free / Occupied / Partly taken summary (read-only) */
-(function(){
-  function init(){
-    var grid=document.getElementById('tableGrid'),tabs=document.getElementById('floorTabs');
-    if(!grid||!tabs||document.getElementById('tableSummary'))return;
-    var box=document.createElement('div');box.id='tableSummary';box.className='table-summary';
-    tabs.parentNode.insertBefore(box,tabs);
-    function chip(c,l,n){return '<span class="ts-chip '+c+'"><i class="ts-dot"></i><b>'+n+'</b>'+l+'</span>';}
-    function update(){
-      var all=grid.querySelectorAll('.table-card');
-      var f=grid.querySelectorAll('.table-card.tc-free').length,
-          b=grid.querySelectorAll('.table-card.tc-full').length,
-          p=grid.querySelectorAll('.table-card.tc-partial').length;
-      var html=chip('ts-free','Free',f)+chip('ts-busy','Occupied',b)+chip('ts-part','Partly taken',p);
-      if(box.dataset.k!==html){box.dataset.k=html;box.innerHTML=html;}
-    }
-    new MutationObserver(update).observe(grid,{childList:true,subtree:true});
-    update();
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
-})();
-/* Settings rail: smooth jump + active-section highlight */
-(function(){
-  function init(){
-    var rail=document.getElementById('settingsRail');
-    if(!rail)return;
-    var links=[].slice.call(rail.querySelectorAll('a'));
-    function setOn(id){links.forEach(function(a){a.classList.toggle('on',a.getAttribute('href')==='#'+id);});}
-    links.forEach(function(a){
-      a.addEventListener('click',function(e){
-        var t=document.getElementById(a.getAttribute('href').slice(1));
-        if(!t)return;
-        e.preventDefault();
-        t.scrollIntoView({behavior:'smooth',block:'start'});
-        setOn(t.id);
-      });
-    });
-    if(!('IntersectionObserver' in window))return;
-    var io=new IntersectionObserver(function(es){
-      es.forEach(function(en){if(en.isIntersecting)setOn(en.target.id);});
-    },{rootMargin:'-15% 0px -70% 0px'});
-    links.forEach(function(a){var t=document.getElementById(a.getAttribute('href').slice(1));if(t)io.observe(t);});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

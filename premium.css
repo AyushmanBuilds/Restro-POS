@@ -726,18 +726,3 @@ input[type="checkbox"],input[type="range"]{accent-color:var(--primary);}
   #view-order .order-menu-pick{margin-bottom:84px;}
 }
 @media(max-width:380px){#view-order .cat-box-grid,#view-order .menu-pick-grid{grid-template-columns:1fr;}}
-
-/* ---------- 10. Full-screen toggle ---------- */
-.fs-toggle{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;width:38px;height:38px;padding:0;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.04);color:#B7C7C0;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;transition:.18s;}
-.fs-toggle:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.3);color:#fff;}
-.fs-toggle[aria-pressed="true"]{background:rgba(255,255,255,.14);color:#fff;}
-.fs-toggle .fs-ico{display:inline-flex;}
-.fs-toggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
-.fs-toggle .fs-lbl{display:none;}
-.fs-toggle-top{display:none;}
-@media(max-width:860px){
-  .fs-toggle-top{display:inline-flex;width:40px;height:40px;border:none;border-radius:12px;background:rgba(255,255,255,.09);color:#fff;}
-  .fs-toggle-bar{width:100%;height:44px;border-radius:14px;}
-  .fs-toggle-bar .fs-lbl{display:inline;}
-}
-.fs-toggle.fs-unsupported{display:none !important;}
