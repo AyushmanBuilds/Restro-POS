@@ -1,0 +1,692 @@
+// ===================== CUSTOMER QR ORDERING =====================
+// Public page — no login. Reached by scanning a table's QR code:
+// order.html?r=<restaurantId>&t=<tableName>
+// Requires Firestore rules that allow public read on menu/settings and
+// public create on customerOrders AND tableRequests — see the README note.
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp, query, where, onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCHOW_aj_Ccux2VkMsocs4SEpSrrFIPst0",
+  authDomain: "restro-billing-b61a6.firebaseapp.com",
+  projectId: "restro-billing-b61a6",
+  storageBucket: "restro-billing-b61a6.firebasestorage.app",
+  messagingSenderId: "554440969043",
+  appId: "1:554440969043:web:4818925230aad56c0aefa6",
+  measurementId: "G-5E2W1K8R5B"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+const $ = (id) => document.getElementById(id);
+// Escapes item/category/table names before they go into innerHTML. These
+// come from the restaurant's own menu (staff-controlled), so risk is lower
+// than user input — but this page is public with no login, so every string
+// that reaches innerHTML gets escaped on principle.
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
+}
+const money = (n) => "₹" + (Math.round(n * 100) / 100).toFixed(2);
+
+const params = new URLSearchParams(location.search);
+const restoId = params.get("r");
+const tableName = params.get("t");
+
+let menuCache = [];
+let cart = []; // { key, name, variant, variantPrice, addons:[{name,price}], qty, note }
+let activeSheetItem = null;
+let sheetVariant = null;
+let sheetAddons = [];
+let sheetQty = 1;
+// Multi-seat: an array of seat letters the customer confirmed, e.g. ["a","b","c"]
+let selectedSeats = [];
+let tableFloor = ""; // this table's floor, looked up at init — sent along with waiter calls
+
+// ===================== SCREEN MANAGER =====================
+const ALL_SCREENS = ["loadingScreen","disabledScreen","errorScreen","seatScreen","app","trackScreen"];
+function show(id) {
+  ALL_SCREENS.forEach(s => $(s).classList.add("hidden"));
+  $(id).classList.remove("hidden");
+}
+function fail(msg) {
+  $("errorMsg").textContent = msg;
+  show("errorScreen");
+}
+
+// ===================== INIT =====================
+async function init() {
+  if (!restoId || !tableName) { fail("This QR code link looks invalid. Please ask staff for help."); return; }
+  try {
+    // Reads from restaurants/{restoId}/public/info — a deliberately small,
+    // publicly-readable doc — rather than the restaurant's main doc, which
+    // also holds staffPinHash and other owner-only settings and is locked
+    // to owner-auth-only reads. Keep this page from ever needing anything
+    // beyond what's mirrored into that public doc.
+    const restoSnap = await getDoc(doc(db, "restaurants", restoId, "public", "info"));
+    if (!restoSnap.exists()) { fail("We couldn't find this restaurant. Please ask staff for help."); return; }
+    const restoData = restoSnap.data();
+    if (!restoData.qrOrderingEnabled) { show("disabledScreen"); return; }
+    $("restoName").textContent = restoData.name || "Menu";
+    $("tableNameLabel").textContent = tableName;
+    $("trackRestoName").textContent = restoData.name || "Menu";
+    $("trackTableLabel").textContent = tableName;
+
+    // Menu: the POS keeps a single snapshot doc (public/menu) in sync, so each scan costs 1 read
+    // instead of one read per menu item. Falls back to the full menu collection if the snapshot
+    // is missing or not readable, so ordering never breaks.
+    let menuItems = null;
+    try {
+      const mSnap = await getDoc(doc(db, "restaurants", restoId, "public", "menu"));
+      if (mSnap.exists() && Array.isArray(mSnap.data().items)) menuItems = mSnap.data().items;
+    } catch (e) { console.warn("Menu snapshot unavailable, reading menu directly", e); }
+    if (!menuItems) {
+      const menuSnap = await getDocs(collection(db, "restaurants", restoId, "menu"));
+      menuItems = menuSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+    menuCache = menuItems.filter(i => i.available !== false);
+
+    // Look up how many chairs this table has (and which floor it's on) —
+    // falls back to 4 seats / no floor if not found.
+    let seatCount = 4;
+    try {
+      const tableSnap = await getDocs(query(collection(db, "restaurants", restoId, "tables"), where("name", "==", tableName)));
+      if (!tableSnap.empty) {
+        const tData = tableSnap.docs[0].data();
+        seatCount = tData.seats || 4;
+        tableFloor = tData.floor || "";
+      }
+    } catch (e) { console.warn("Table lookup failed, defaulting to 4 seats", e); }
+
+    tableSeatCount = seatCount;
+    showSeatScreen(seatCount);
+    // customer already ordered from this phone? take them straight back to live status
+    if (resumeTracking()) show("trackScreen");
+  } catch (e) {
+    console.error(e);
+    fail("We couldn't load the menu right now. Please ask staff for help or try again.");
+  }
+}
+
+// ===================== SEAT SCREEN — MULTI-SELECT =====================
+// Customers tap every seat their party is occupying, then tap Confirm.
+// This replaces the old single-tap-and-go flow.
+function showSeatScreen(seatCount) {
+  $("seatScreenTableName").textContent = "Table " + tableName;
+  selectedSeats = [];
+
+  const letters = "abcdefghijkl".slice(0, Math.min(12, Math.max(1, seatCount))).split("");
+
+  $("seatGrid").innerHTML = letters.map(l => `
+    <button type="button" class="ord-seat-btn" data-seat="${l}">
+      <span class="ord-seat-btn-letter">${l.toUpperCase()}</span>
+      <span class="ord-seat-btn-sub">Seat</span>
+    </button>`).join("");
+
+  $("seatGrid").querySelectorAll(".ord-seat-btn").forEach(btn => {
+    btn.onclick = () => {
+      const seat = btn.dataset.seat;
+      if (selectedSeats.includes(seat)) {
+        // deselect
+        selectedSeats = selectedSeats.filter(s => s !== seat);
+        btn.classList.remove("selected");
+        btn.querySelector(".ord-seat-btn-sub").textContent = "Seat";
+      } else {
+        // select
+        selectedSeats.push(seat);
+        btn.classList.add("selected");
+        btn.querySelector(".ord-seat-btn-sub").textContent = "✓ Selected";
+      }
+      refreshSeatConfirmBtn();
+    };
+  });
+
+  refreshSeatConfirmBtn();
+  show("seatScreen");
+}
+
+function refreshSeatConfirmBtn() {
+  const btn = $("seatConfirmBtn");
+  if (selectedSeats.length === 0) {
+    btn.disabled = true;
+    btn.textContent = "Select at least one seat";
+  } else {
+    btn.disabled = false;
+    const labels = selectedSeats.map(s => s.toUpperCase()).join(", ");
+    btn.textContent = `Confirm — Seat${selectedSeats.length > 1 ? "s" : ""} ${labels}`;
+  }
+}
+
+$("seatConfirmBtn").onclick = () => {
+  if (!selectedSeats.length) return;
+  // Build the header pill label
+  const sorted = [...selectedSeats].sort();
+  const labels = sorted.map(s => s.toUpperCase()).join(", ");
+  $("seatPillLabel").textContent = `Seat${sorted.length > 1 ? "s" : ""} ${labels}`;
+  renderCategoryTabs();
+  renderMenu();
+  show("app");
+};
+
+// "Call waiter" — available any time once the customer is in the ordering
+// app (not just at the seat-picking step). Writes a waiterCalls doc; staff
+// see it live on the QR Ordering dashboard, table + floor included, with a
+// chime and a red dot on the tab so nobody misses it.
+let waiterCallCooldownUntil = 0;
+function refreshWaiterBtn() {
+  const btn = $("callWaiterBtn");
+  if (!btn) return;
+  const remaining = Math.ceil((waiterCallCooldownUntil - Date.now()) / 1000);
+  if (remaining > 0) {
+    btn.disabled = true;
+    btn.textContent = `🔔 Waiter notified (${remaining}s)`;
+    setTimeout(refreshWaiterBtn, 500);
+  } else {
+    btn.disabled = false;
+    btn.textContent = "🔔 Call waiter";
+  }
+}
+if ($("callWaiterBtn")) {
+  $("callWaiterBtn").onclick = async () => {
+    if (Date.now() < waiterCallCooldownUntil) return;
+    const btn = $("callWaiterBtn");
+    btn.disabled = true;
+    btn.textContent = "Notifying staff…";
+    try {
+      await addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
+        tableName,
+        floor: tableFloor,
+        seatLabels: selectedSeats.length ? [...selectedSeats].sort() : [],
+        status: "pending",
+        createdAt: serverTimestamp()
+      });
+      // 60s cooldown so an excited table can't spam the dashboard.
+      waiterCallCooldownUntil = Date.now() + 60000;
+      refreshWaiterBtn();
+    } catch (e) {
+      console.error(e);
+      btn.disabled = false;
+      btn.textContent = "🔔 Call waiter";
+      alert("Couldn't reach staff — please wave someone down directly.");
+    }
+  };
+}
+
+// ===================== MENU =====================
+function categories() {
+  const set = new Set(menuCache.map(i => i.category || "Menu"));
+  return [...set];
+}
+let activeCat = null;
+function renderCategoryTabs() {
+  const cats = categories();
+  activeCat = cats[0] || null;
+  $("catTabs").innerHTML = cats.map(c => `<button class="ord-cat-tab ${c === activeCat ? "active" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("");
+  $("catTabs").querySelectorAll(".ord-cat-tab").forEach(b => {
+    b.onclick = () => {
+      activeCat = b.dataset.cat;
+      $("catTabs").querySelectorAll(".ord-cat-tab").forEach(x => x.classList.toggle("active", x === b));
+      document.getElementById(`cat-${cssEscape(activeCat)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  });
+}
+function cssEscape(s) { return s.replace(/[^a-zA-Z0-9]/g, "_"); }
+
+function cartQtyForItem(itemId) {
+  return cart.filter(c => c.itemId === itemId).reduce((s, c) => s + c.qty, 0);
+}
+
+function renderMenu() {
+  const cats = categories();
+  $("menuList").innerHTML = cats.map(cat => `
+    <div id="cat-${cssEscape(cat)}">
+      <div class="ord-cat-heading">${escapeHtml(cat)}</div>
+      ${menuCache.filter(i => (i.category || "Menu") === cat).map(itemCardHtml).join("")}
+    </div>
+  `).join("") || `<div class="ord-empty-note">Menu isn't available right now.</div>`;
+
+  document.querySelectorAll(".ord-item-card").forEach(card => {
+    card.onclick = () => {
+      openItemSheet(menuCache.find(i => i.id === card.dataset.id));
+    };
+  });
+  document.querySelectorAll(".ord-item-stepper button").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      stepMenuItem(btn.closest(".ord-item-stepper").dataset.id, btn.dataset.act === "plus" ? 1 : -1);
+    };
+  });
+  document.querySelectorAll(".ord-item-add-btn[data-simple]").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const item = menuCache.find(i => i.id === btn.dataset.id);
+      addSimpleItemToCart(item);
+    };
+  });
+}
+
+function itemCardHtml(i) {
+  const inCartQty = cartQtyForItem(i.id);
+  const hasOptions = (i.variants && i.variants.length) || (i.addons && i.addons.length);
+  const priceLabel = i.variants?.length ? `From ${money(Math.min(...i.variants.map(v => v.price)))}` : money(i.basePrice || 0);
+  return `
+  <div class="ord-item-card" data-id="${i.id}">
+    <div class="ord-item-main">
+      <div class="ord-item-name"><span class="ord-veg-dot ${i.veg === false ? "nonveg" : ""}"></span>${escapeHtml(i.name)}</div>
+      <div class="ord-item-price">${priceLabel}</div>
+    </div>
+    ${inCartQty
+      ? `<div class="ord-item-stepper" data-id="${i.id}">
+          <button type="button" data-act="minus" aria-label="Remove one ${escapeHtml(i.name)}">−</button>
+          <span>${inCartQty}</span>
+          <button type="button" data-act="plus" aria-label="Add one more ${escapeHtml(i.name)}">+</button>
+        </div>`
+      : `<button class="ord-item-add-btn" ${hasOptions ? "" : `data-simple data-id="${i.id}"`}>${hasOptions ? "Select" : "Add"}</button>`}
+  </div>`;
+}
+
+// +1 / −1 straight from the menu card
+function stepMenuItem(itemId, delta) {
+  const item = menuCache.find(i => i.id === itemId);
+  if (!item) return;
+  const hasOptions = (item.variants && item.variants.length) || (item.addons && item.addons.length);
+  const lines = cart.filter(c => c.itemId === itemId);
+  if (delta > 0) {
+    if (!hasOptions) { addSimpleItemToCart(item); return; }
+    if (lines.length === 1) lines[0].qty += 1;
+    else { openItemSheet(item); return; }   // several variants in the cart: let them choose which
+  } else {
+    const c = lines[lines.length - 1];
+    if (!c) return;
+    c.qty -= 1;
+    if (c.qty <= 0) cart = cart.filter(x => x.key !== c.key);
+  }
+  refreshCartUI();
+  renderMenu();
+}
+
+function addSimpleItemToCart(item) {
+  const key = item.id;
+  const existing = cart.find(c => c.key === key);
+  const isNewAdd = !existing;
+  if (existing) existing.qty += 1;
+  else cart.push({ key, itemId: item.id, name: item.name, variant: null, unitPrice: item.basePrice || 0, addons: [], qty: 1 });
+  refreshCartUI();
+  renderMenu();
+  if (isNewAdd) maybeShowUpsell(item);
+}
+
+// ===================== UPSELL SUGGESTIONS =====================
+// Shown once per triggering item per visit, right after it's first added,
+// so a customer adding a burger sees "goes great with: fries, coke" with a
+// one-tap add — without nagging them again if they bump the qty later.
+const upsellShownFor = new Set();
+let upsellAutoHideTimer = null;
+function maybeShowUpsell(triggerItem) {
+  if (!triggerItem.upsellIds?.length || upsellShownFor.has(triggerItem.id)) return;
+  const suggestions = triggerItem.upsellIds
+    .map(id => menuCache.find(m => m.id === id))
+    .filter(m => m && cartQtyForItem(m.id) === 0);
+  if (!suggestions.length) return;
+  upsellShownFor.add(triggerItem.id);
+  showUpsellPrompt(suggestions);
+}
+function showUpsellPrompt(items) {
+  $("upsellItems").innerHTML = items.map(i => `
+    <div class="ord-upsell-item" data-id="${i.id}">
+      <div class="ord-upsell-item-main">
+        <span class="ord-veg-dot ${i.veg === false ? "nonveg" : ""}"></span>
+        <div>
+          <div class="ord-upsell-item-name">${escapeHtml(i.name)}</div>
+          <div class="ord-upsell-item-price">${i.variants?.length ? "From " + money(Math.min(...i.variants.map(v => v.price))) : money(i.basePrice || 0)}</div>
+        </div>
+      </div>
+      <button class="ord-upsell-add-btn" data-id="${i.id}">+ Add</button>
+    </div>`).join("");
+  $("upsellItems").querySelectorAll(".ord-upsell-add-btn").forEach(btn => {
+    btn.onclick = () => {
+      const item = menuCache.find(m => m.id === btn.dataset.id);
+      if (!item) return;
+      if (item.variants?.length || item.addons?.length) { hideUpsellPrompt(); openItemSheet(item); return; }
+      addSimpleItemToCart(item);
+      btn.textContent = "✓ Added";
+      btn.disabled = true;
+      btn.closest(".ord-upsell-item").classList.add("added");
+    };
+  });
+  $("upsellPrompt").classList.remove("hidden");
+  requestAnimationFrame(() => $("upsellPrompt").classList.add("shown"));
+  clearTimeout(upsellAutoHideTimer);
+  upsellAutoHideTimer = setTimeout(hideUpsellPrompt, 8000);
+}
+function hideUpsellPrompt() {
+  clearTimeout(upsellAutoHideTimer);
+  $("upsellPrompt").classList.remove("shown");
+  setTimeout(() => $("upsellPrompt").classList.add("hidden"), 250);
+}
+if ($("upsellCloseBtn")) $("upsellCloseBtn").onclick = hideUpsellPrompt;
+
+// ===================== ITEM DETAIL SHEET =====================
+function openItemSheet(item) {
+  activeSheetItem = item;
+  sheetVariant = item.variants?.length ? item.variants[0] : null;
+  sheetAddons = [];
+  sheetQty = 1;
+  $("sheetItemName").textContent = item.name;
+
+  $("sheetVariants").innerHTML = item.variants?.length ? `
+    <div class="ord-sheet-block-title">Choose an option</div>
+    ${item.variants.map((v, idx) => `
+      <div class="ord-opt-row ${idx === 0 ? "selected" : ""}" data-idx="${idx}">
+        <span class="ord-opt-name">${escapeHtml(v.name)}</span><span class="ord-opt-price">${money(v.price)}</span>
+      </div>`).join("")}` : "";
+  $("sheetVariants").querySelectorAll(".ord-opt-row").forEach(row => {
+    row.onclick = () => {
+      sheetVariant = item.variants[row.dataset.idx];
+      $("sheetVariants").querySelectorAll(".ord-opt-row").forEach(r => r.classList.remove("selected"));
+      row.classList.add("selected");
+      updateSheetAddBtn();
+    };
+  });
+
+  $("sheetAddons").innerHTML = item.addons?.length ? `
+    <div class="ord-sheet-block-title">Add-ons</div>
+    ${item.addons.map((a, idx) => `
+      <div class="ord-opt-row" data-idx="${idx}">
+        <span class="ord-opt-name">${escapeHtml(a.name)}</span><span class="ord-opt-price">+${money(a.price)}</span>
+      </div>`).join("")}` : "";
+  $("sheetAddons").querySelectorAll(".ord-opt-row").forEach(row => {
+    row.onclick = () => {
+      const addon = item.addons[row.dataset.idx];
+      const idx = sheetAddons.findIndex(a => a.name === addon.name);
+      if (idx >= 0) { sheetAddons.splice(idx, 1); row.classList.remove("selected"); }
+      else { sheetAddons.push(addon); row.classList.add("selected"); }
+      updateSheetAddBtn();
+    };
+  });
+
+  $("sheetQtyVal").textContent = sheetQty;
+  updateSheetAddBtn();
+  $("itemSheet").classList.remove("hidden");
+  $("itemSheetOverlay").classList.remove("hidden");
+}
+
+function sheetUnitPrice() {
+  const base = sheetVariant ? sheetVariant.price : (activeSheetItem.basePrice || 0);
+  const addonsTotal = sheetAddons.reduce((s, a) => s + (a.price || 0), 0);
+  return base + addonsTotal;
+}
+function updateSheetAddBtn() {
+  $("sheetAddBtn").textContent = `Add to order — ${money(sheetUnitPrice() * sheetQty)}`;
+}
+
+$("sheetQtyMinus").onclick = () => {
+  sheetQty = Math.max(1, sheetQty - 1);
+  $("sheetQtyVal").textContent = sheetQty;
+  updateSheetAddBtn();
+};
+$("sheetQtyPlus").onclick = () => {
+  sheetQty += 1;
+  $("sheetQtyVal").textContent = sheetQty;
+  updateSheetAddBtn();
+};
+
+function closeItemSheet() {
+  $("itemSheet").classList.add("hidden");
+  $("itemSheetOverlay").classList.add("hidden");
+}
+$("closeSheetBtn").onclick = closeItemSheet;
+$("itemSheetOverlay").onclick = closeItemSheet;
+
+$("sheetAddBtn").onclick = () => {
+  const key = activeSheetItem.id + "|" + (sheetVariant?.name || "") + "|" + sheetAddons.map(a => a.name).sort().join(",");
+  const existing = cart.find(c => c.key === key);
+  const triggerItem = activeSheetItem;
+  if (existing) existing.qty += sheetQty;
+  else cart.push({
+    key, itemId: activeSheetItem.id, name: activeSheetItem.name,
+    variant: sheetVariant?.name || null, unitPrice: sheetUnitPrice(), addons: sheetAddons.slice(), qty: sheetQty
+  });
+  closeItemSheet();
+  refreshCartUI();
+  renderMenu();
+  maybeShowUpsell(triggerItem);
+};
+
+// ===================== CART =====================
+function cartTotal() { return cart.reduce((s, c) => s + c.unitPrice * c.qty, 0); }
+function cartCount() { return cart.reduce((s, c) => s + c.qty, 0); }
+
+function refreshCartUI() {
+  const count = cartCount();
+  $("cartFab").classList.toggle("hidden", count === 0);
+  $("cartFabCount").textContent = count;
+  $("cartTotal").textContent = money(cartTotal());
+  $("cartItems").innerHTML = cart.length ? cart.map(c => `
+    <div class="ord-cart-item-row" data-key="${c.key}">
+      <div class="ord-cart-item-main">
+        <div class="ord-cart-item-name">${escapeHtml(c.name)}${c.variant ? ` (${escapeHtml(c.variant)})` : ""}</div>
+        ${c.addons.length ? `<div class="ord-cart-item-sub">+ ${escapeHtml(c.addons.map(a => a.name).join(", "))}</div>` : ""}
+      </div>
+      <div class="ord-cart-qty-stepper">
+        <button data-act="minus">−</button>
+        <span>${c.qty}</span>
+        <button data-act="plus">+</button>
+      </div>
+      <div class="ord-cart-item-price">${money(c.unitPrice * c.qty)}</div>
+    </div>`).join("") : `<div class="ord-empty-note">Your order is empty.</div>`;
+
+  $("cartItems").querySelectorAll(".ord-cart-item-row").forEach(row => {
+    const c = cart.find(x => x.key === row.dataset.key);
+    row.querySelector("[data-act='minus']").onclick = () => {
+      c.qty -= 1;
+      if (c.qty <= 0) cart = cart.filter(x => x.key !== c.key);
+      refreshCartUI(); renderMenu();
+    };
+    row.querySelector("[data-act='plus']").onclick = () => { c.qty += 1; refreshCartUI(); renderMenu(); };
+  });
+}
+
+$("cartFab").onclick = () => { $("cartDrawer").classList.remove("hidden"); $("cartOverlay").classList.remove("hidden"); };
+$("closeCartBtn").onclick = () => { $("cartDrawer").classList.add("hidden"); $("cartOverlay").classList.add("hidden"); };
+$("cartOverlay").onclick = () => { $("cartDrawer").classList.add("hidden"); $("cartOverlay").classList.add("hidden"); };
+
+// ===================== PLACE ORDER =====================
+$("placeOrderBtn").onclick = async () => {
+  if (!cart.length) return;
+  const custName = $("custNameInput").value.trim();
+  if (!custName) {
+    alert("Please enter your name before sending the order — it helps staff find you at the table.");
+    $("custNameInput").focus();
+    return;
+  }
+  let custPhone = $("custPhoneInput").value.replace(/\D/g, "");
+  if (custPhone.length === 12 && custPhone.startsWith("91")) custPhone = custPhone.slice(2);
+  else if (custPhone.length === 11 && custPhone.startsWith("0")) custPhone = custPhone.slice(1);
+  if (!/^[6-9]\d{9}$/.test(custPhone)) {
+    alert("Please enter a valid 10-digit mobile number — we'll send your bill on WhatsApp.");
+    $("custPhoneInput").focus();
+    return;
+  }
+  $("placeOrderBtn").disabled = true;
+  $("placeOrderBtn").textContent = "Sending…";
+  try {
+    // selectedSeats is now an array like ["a","b","c"]
+    const placedRef = await addDoc(collection(db, "restaurants", restoId, "customerOrders"), {
+      tableName,
+      seatLabels: selectedSeats.length ? [...selectedSeats].sort() : [],
+      customerName: custName,
+      customerPhone: custPhone,
+      items: cart.map(c => ({ itemId: c.itemId, name: c.name, variant: c.variant, qty: c.qty, price: c.unitPrice, addons: c.addons.map(a => a.name), note: "" })),
+      total: cartTotal(),
+      status: "pending",
+      createdAt: serverTimestamp()
+    });
+    cart = [];
+    $("cartDrawer").classList.add("hidden");
+    $("cartOverlay").classList.add("hidden");
+    trackOrder(placedRef.id);
+    show("trackScreen");
+    window.scrollTo(0, 0);
+  } catch (e) {
+    console.error(e);
+    alert("Couldn't send your order — please try again or call staff.");
+  }
+  $("placeOrderBtn").disabled = false;
+  $("placeOrderBtn").textContent = "Send order to kitchen";
+};
+
+// ===================== LIVE ORDER TRACKER =====================
+// After ordering, the customer's phone follows each order live:
+// Received -> Preparing -> Ready -> Served, driven by the kitchen display.
+const TRACK_KEY = `zs_orders_${restoId}_${tableName}`;
+const TRACK_TTL = 4 * 3600 * 1000;      // stop following orders after 4 hours
+const TRACK_DONE_HIDE = 90 * 60 * 1000; // hide a finished order 90 min after it was served
+let tableSeatCount = 4;
+const trackUnsubs = {};   // customerOrders doc id -> unsubscribe fn
+const trackData = {};     // customerOrders doc id -> latest data
+const trackPrevStage = {};
+let trackFailed = false;
+
+const TRACK_STEPS = [
+  { label: "Order received", sub: "Your order is with our team" },
+  { label: "Preparing", sub: "The kitchen is cooking it" },
+  { label: "Ready", sub: "Dispatched from the kitchen" },
+  { label: "Served", sub: "Enjoy your meal!" }
+];
+
+function loadTracked() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(TRACK_KEY) || "[]");
+    return arr.filter(x => x && x.id && Date.now() - x.t < TRACK_TTL);
+  } catch (e) { return []; }
+}
+function saveTracked(arr) { try { localStorage.setItem(TRACK_KEY, JSON.stringify(arr)); } catch (e) {} }
+
+// -1 rejected, 0 received, 1 preparing, 2 ready, 3 served
+function trackStage(o) {
+  if (o.status === "rejected") return -1;
+  if (o.billed || o.kdsCleared) return 3;
+  if (o.status !== "approved") return 0;
+  const k = o.kitchenStatus || "new";
+  return k === "preparing" ? 1 : k === "ready" ? 2 : 0;
+}
+
+function trackOrder(id) {
+  const arr = loadTracked();
+  if (!arr.some(x => x.id === id)) { arr.push({ id, t: Date.now() }); saveTracked(arr); }
+  subscribeTracked(id);
+}
+function untrack(id) {
+  if (trackUnsubs[id]) { trackUnsubs[id](); delete trackUnsubs[id]; }
+  delete trackData[id];
+  saveTracked(loadTracked().filter(x => x.id !== id));
+}
+function subscribeTracked(id) {
+  if (trackUnsubs[id]) return;
+  trackUnsubs[id] = onSnapshot(doc(db, "restaurants", restoId, "customerOrders", id), (snap) => {
+    if (!snap.exists()) { untrack(id); renderTracker(); return; }
+    const o = snap.data();
+    const stage = trackStage(o);
+    const ms = (o.statusUpdatedAt?.toMillis?.() || o.createdAt?.toMillis?.() || Date.now());
+    if ((stage === 3 || stage === -1) && Date.now() - ms > TRACK_DONE_HIDE) { untrack(id); renderTracker(); return; }
+    // a little buzz when the food leaves the kitchen
+    if (stage === 2 && trackPrevStage[id] !== undefined && trackPrevStage[id] < 2 && navigator.vibrate) navigator.vibrate([180, 80, 180]);
+    trackPrevStage[id] = stage;
+    trackData[id] = o;
+    trackFailed = false;
+    renderTracker();
+  }, (err) => {
+    console.warn("Order tracking unavailable", err);
+    trackFailed = true;
+    renderTracker();
+  });
+}
+function resumeTracking() {
+  const arr = loadTracked();
+  if (!arr.length) return false;
+  arr.forEach(x => subscribeTracked(x.id));
+  return true;
+}
+
+function trackHeadline(o) {
+  const stage = trackStage(o);
+  if (stage === -1) return { ico: "⚠️", h: "Order couldn't be accepted", p: "Please call a staff member and we'll sort it out.", bad: true };
+  if (stage === 0 && o.status !== "approved") return { ico: "🧾", h: "Order received", p: "We've got it! Waiting for staff to confirm." };
+  if (stage === 0) return { ico: "✅", h: "Order confirmed", p: "Sent to the kitchen — they'll start shortly." };
+  if (stage === 1) return { ico: "🔥", h: "Being prepared", p: "Your food is being cooked right now." };
+  if (stage === 2) return { ico: "🛎️", h: "Ready — on its way!", p: "Your order has left the kitchen and is coming to your table." };
+  return { ico: "🍽️", h: "Served — enjoy!", p: "Hope you love it. You can order more anytime." };
+}
+
+function renderTracker() {
+  const list = $("trackList");
+  const order = loadTracked().map(x => x.id).filter(id => trackData[id]);
+  $("trackNotice").classList.toggle("hidden", !(trackFailed && !order.length));
+  $("trackNotice").textContent = "Live status isn't available right now, but your order has been sent. Please ask a staff member for an update.";
+  refreshTrackBtn();
+
+  if (!order.length) {
+    list.innerHTML = "";
+    $("trackHeroIcon").textContent = "🧾";
+    $("trackHeadline").textContent = trackFailed ? "Order sent" : "Checking your order…";
+    $("trackSubline").textContent = trackFailed ? "The kitchen has it." : "Just a moment";
+    $("trackHero").classList.remove("rejected");
+    return;
+  }
+
+  // hero follows the order that is furthest from being finished
+  const live = order.filter(id => { const s = trackStage(trackData[id]); return s >= 0 && s < 3; });
+  const heroId = live.length ? live.reduce((a, b) => trackStage(trackData[a]) <= trackStage(trackData[b]) ? a : b) : order[order.length - 1];
+  const hl = trackHeadline(trackData[heroId]);
+  $("trackHeroIcon").textContent = hl.ico;
+  $("trackHeadline").textContent = hl.h;
+  $("trackSubline").textContent = hl.p;
+  $("trackHero").classList.toggle("rejected", !!hl.bad);
+
+  list.innerHTML = order.slice().reverse().map((id) => {
+    const o = trackData[id];
+    const n = order.indexOf(id) + 1;
+    const stage = trackStage(o);
+    const items = o.items || [];
+    const qty = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+    const itemsHtml = items.map(i => `<li><span>${escapeHtml(i.qty)}× ${escapeHtml(i.name)}${i.variant ? ` (${escapeHtml(i.variant)})` : ""}</span></li>`).join("");
+    if (stage === -1) {
+      return `<div class="ord-trk-card rejected"><div class="ord-trk-head"><div><b>Order ${n}</b><small>${qty} item${qty === 1 ? "" : "s"} · ${money(o.total || 0)}</small></div><span class="ord-trk-badge bad">Not accepted</span></div>
+        <div class="ord-trk-reject">Sorry — this order couldn't be accepted. Please speak to a staff member.</div></div>`;
+    }
+    const badge = TRACK_STEPS[stage].label;
+    const steps = TRACK_STEPS.map((st, i) => {
+      const cls = i < stage ? "done" : i === stage ? (stage === 3 ? "done" : "active") : "";
+      let sub = st.sub;
+      if (i === 0) sub = o.status === "approved" ? "Confirmed and sent to the kitchen" : "Waiting for staff to confirm";
+      return `<li class="ord-trk-step ${cls}"><span class="ord-trk-dot">${cls === "done" ? "✓" : i + 1}</span>
+        <span class="ord-trk-step-txt"><b>${st.label}</b><small>${cls ? sub : ""}</small></span></li>`;
+    }).join("");
+    return `<div class="ord-trk-card ${stage === 3 ? "finished" : ""}">
+      <div class="ord-trk-head"><div><b>Order ${n}</b><small>${qty} item${qty === 1 ? "" : "s"} · ${money(o.total || 0)}</small></div><span class="ord-trk-badge s${stage}">${badge}</span></div>
+      <ol class="ord-trk-steps">${steps}</ol>
+      <details class="ord-trk-items"><summary>View items (${qty})</summary><ul>${itemsHtml}</ul></details>
+    </div>`;
+  }).join("");
+}
+
+function refreshTrackBtn() {
+  const btn = $("trackOrderBtn"); if (!btn) return;
+  const ids = loadTracked().map(x => x.id).filter(id => trackData[id]);
+  btn.classList.toggle("hidden", !ids.length);
+  const active = ids.filter(id => { const s = trackStage(trackData[id]); return s >= 0 && s < 3; }).length;
+  btn.classList.toggle("live", active > 0);
+}
+if ($("trackOrderBtn")) $("trackOrderBtn").onclick = () => { renderTracker(); show("trackScreen"); window.scrollTo(0, 0); };
+
+$("orderAgainBtn").onclick = () => {
+  if (selectedSeats.length) { refreshCartUI(); renderMenu(); show("app"); }
+  else showSeatScreen(tableSeatCount);   // page was reloaded — seats need picking again
+};
+
+init();

@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sip &amp; Scoop Cafe POS — Billing</title>
+<link rel="icon" type="image/png" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Sora:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="dashboard.css">
+<link rel="stylesheet" href="pos-redesign.css">
+</head>
+<body>
+
+<!-- ============ FULLSCREEN LAUNCH GATE ============ -->
+<!-- Browsers only allow requestFullscreen() from a real user click/tap (no
+     auto-launch on page load), and true fullscreen is the only way a website
+     can hide both the browser chrome and the Windows taskbar. So we ask for
+     one tap here, then go fullscreen immediately. -->
+<div id="fsGate" class="fs-gate">
+  <div class="fs-gate-card">
+    <img src="img/logo-full.png" alt="" class="fs-gate-logo">
+    <div class="fs-gate-title">Sip &amp; Scoop Cafe POS</div>
+    <div class="fs-gate-sub">Tap below to launch in full-screen POS mode</div>
+    <button class="btn-primary" id="fsEnterBtn">⛶ Enter full-screen</button>
+    <button class="fs-gate-skip" id="fsSkipBtn">Continue in browser window</button>
+  </div>
+</div>
+<button id="fsReenterBtn" class="fs-reenter hidden" title="Back to full-screen">⛶</button>
+
+<div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="brand-mark">
+      <img src="img/icon.png" alt="" class="brand-icon-img">
+      <div>
+        <div class="brand-name">Sip &amp; Scoop Cafe POS</div>
+        <div class="brand-tag">Billing for restaurants &amp; cafés</div>
+      </div>
+    </div>
+
+    <div id="authError" class="auth-error hidden"></div>
+
+    <div id="loginForm">
+      <h1>Sign in</h1>
+      <label>Email
+        <input type="email" id="loginEmail" placeholder="owner@yourcafe.com" autocomplete="email">
+      </label>
+      <label>Password
+        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+      </label>
+      <button class="btn-primary" id="loginBtn">Sign in</button>
+      <p class="auth-switch">New restaurant? <a id="showSignup">Create an account</a></p>
+    </div>
+
+    <div id="signupForm" class="hidden">
+      <h1>Set up your restaurant</h1>
+      <label>Restaurant / Café name
+        <input type="text" id="suRestoName" placeholder="Spice Route Café">
+      </label>
+      <label>Owner email
+        <input type="email" id="suEmail" placeholder="owner@yourcafe.com">
+      </label>
+      <label>Password
+        <input type="password" id="suPassword" placeholder="Minimum 6 characters">
+      </label>
+      <button class="btn-primary" id="signupBtn">Create account</button>
+      <p class="auth-switch">Already have an account? <a id="showLogin">Sign in</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appShell" class="app-shell hidden">
+
+  <div class="topbar">
+    <button class="hamburger" id="hamburgerBtn">☰</button>
+    <div class="topbar-title" id="topbarTitle">Dashboard</div>
+    <img src="img/icon.png" alt="" class="brand-icon-img small">
+  </div>
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <img src="img/icon.png" alt="" class="brand-icon-img small">
+      <div>
+        <div id="sbRestoName" class="sb-resto-name">—</div>
+        <div class="sb-resto-sub">Cafe POS</div>
+      </div>
+      <button class="sidebar-close" id="sidebarCloseBtn">×</button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="dashboard" aria-label="Dashboard"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg><span class="nav-dot" data-dot="dashboard"></span></span>Dashboard</button>
+      <button class="nav-item" data-view="tables" aria-label="Tables &amp; Orders"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="9.5" rx="8" ry="4"/><path d="M12 13.5V20M8 20h8"/></svg><span class="nav-dot" data-dot="tables"></span></span>Tables &amp; Orders</button>
+      <button class="nav-item" data-view="menu" aria-label="Menu Builder"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v7a2 2 0 0 0 2 2v9M10 3v7M8 3v5M18 3c-2 1-3 3.5-3 6s1 3 3 3v9"/></svg><span class="nav-dot" data-dot="menu"></span></span>Menu Builder</button>
+      <button class="nav-item" data-view="kds" aria-label="Kitchen Display"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16v5a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/><path d="M8 8c0-1.5 1-1.5 1-3M12 8c0-1.5 1-1.5 1-3M16 8c0-1.5 1-1.5 1-3"/></svg><span class="nav-dot" data-dot="kds"></span></span>Kitchen Display</button>
+      <button class="nav-item" data-view="reservations" aria-label="Reservations"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="nav-dot" data-dot="reservations"></span></span>Reservations</button>
+      <button class="nav-item" data-view="qrorder" aria-label="QR Ordering"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM17 20h4M20 17v3"/></svg><span class="nav-dot" data-dot="qrorder"></span></span>QR Ordering</button>
+      <button class="nav-item" data-view="expenses" aria-label="Expenses &amp; Cash"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5a2 2 0 0 1-2-1z"/><circle cx="16.5" cy="14.5" r="1"/></svg><span class="nav-dot" data-dot="expenses"></span></span>Expenses &amp; Cash</button>
+      <button class="nav-item" data-view="sales" aria-label="Sales Summary"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M2 20h20"/></svg><span class="nav-dot" data-dot="sales"></span></span>Sales Summary</button>
+      <button class="nav-item" data-view="bills" aria-label="Bill History"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span class="nav-dot" data-dot="bills"></span></span>Bill History</button>
+      <button class="nav-item" data-view="staff" aria-label="Staff Management"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span class="nav-dot" data-dot="staff"></span></span>Staff Management</button>
+      <button class="nav-item" data-view="settings" aria-label="Settings"><span class="nav-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span class="nav-dot" data-dot="settings"></span></span>Settings</button>
+    </nav>
+
+    <button class="logout-btn hidden" id="logoutBtn">Sign out</button>
+  </aside>
+
+  <main class="main-area">
+
+    <!-- DASHBOARD -->
+    <section id="view-dashboard" class="view dashboard-view active">
+      <div class="dx">
+
+        <!-- HERO -->
+        <header class="dx-hero">
+          <svg class="dx-hero-art" viewBox="0 0 360 360" aria-hidden="true">
+            <defs><radialGradient id="dxPlate" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#D64526" stop-opacity=".26"/><stop offset="1" stop-color="#D64526" stop-opacity="0"/></radialGradient></defs>
+            <circle cx="180" cy="180" r="176" fill="url(#dxPlate)"/>
+            <circle cx="180" cy="180" r="150" fill="none" stroke="#fff" stroke-opacity=".07"/>
+            <circle cx="180" cy="180" r="116" fill="none" stroke="#fff" stroke-opacity=".08"/>
+            <circle cx="180" cy="180" r="82" fill="none" stroke="#E9B58F" stroke-opacity=".20"/>
+            <g fill="none" stroke="#F6EFE4" stroke-opacity=".34" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M112 212h136"/><path d="M122 212a58 58 0 0 1 116 0"/><circle cx="180" cy="146" r="5"/><path d="M96 224h168" stroke-opacity=".18"/>
+            </g>
+          </svg>
+          <div class="dx-hero-top">
+            <div class="dx-eyebrow"><span class="dx-live"></span><span id="dashGreeting">Today</span></div>
+            <button class="dx-ghost-btn" id="dashViewBillsBtn">View all bills <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="dx-hero-copy">
+            <h1 id="dashDate">—</h1>
+            <p id="dashLiveLine">A live view of service, orders, and today’s takings.</p>
+            <div class="dx-chips" id="dashAlerts"></div>
+          </div>
+          <div class="dx-actions" id="dashQuickActions">
+            <button class="dx-act primary" data-qa="order"><i><svg viewBox="0 0 24 24"><path d="M3 17h18M5 17a7 7 0 0 1 14 0M12 8V6M10.5 6h3"/></svg></i><span>New order</span></button>
+            <button class="dx-act" data-qa="table"><i><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></i><span>Add table</span></button>
+            <button class="dx-act" data-qa="menu"><i><svg viewBox="0 0 24 24"><path d="M7 3h10a1 1 0 0 1 1 1v16l-3-2-3 2-3-2-3 2V4a1 1 0 0 1 1-1zM9 8h6M9 12h6"/></svg></i><span>Menu</span></button>
+            <button class="dx-act" data-qa="kds"><i><svg viewBox="0 0 24 24"><path d="M5 11h14v5a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4v-5zM3 11h18M9 7c0-1.5 1.5-1.5 1.5-3M14 7c0-1.5 1.5-1.5 1.5-3"/></svg></i><span>Kitchen</span></button>
+            <button class="dx-act" data-qa="sales"><i><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M2 20h20"/></svg></i><span>Reports</span></button>
+          </div>
+        </header>
+
+        <!-- TODAY'S TAKINGS -->
+        <section class="dx-card dx-rev">
+          <div class="dx-card-head">
+            <span class="dx-label">Today’s takings</span>
+            <span class="dx-delta flat" id="statRevDelta">—</span>
+          </div>
+          <div class="dx-rev-value" id="statRevenue">₹0.00</div>
+          <div class="dx-sub" id="statRevSub">Total billed today</div>
+          <div class="dx-legend"><span><i class="t"></i>Today</span><span><i class="y"></i>Yesterday</span></div>
+          <div class="dx-spark" id="dashHourChart"></div>
+          <div class="dx-spark-axis" id="dashHourAxis"></div>
+        </section>
+
+        <!-- KPIs -->
+        <div class="dx-card dx-kpi" style="--k:#D64526;--kt:#FCEAE4">
+          <div class="dx-kpi-top"><span class="dx-label">Bills generated</span><i class="dx-kpi-ico"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg></i></div>
+          <div class="dx-kpi-val" id="statBills">0</div>
+          <div class="dx-sub" id="statBillsSub">Completed today</div>
+        </div>
+        <div class="dx-card dx-kpi" style="--k:#B7791F;--kt:#FBF1DE">
+          <div class="dx-kpi-top"><span class="dx-label">Average bill</span><i class="dx-kpi-ico"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9M15 7h5v5"/></svg></i></div>
+          <div class="dx-kpi-val" id="statAvgBill">₹0.00</div>
+          <div class="dx-sub">Per bill, today</div>
+        </div>
+        <div class="dx-card dx-kpi" style="--k:#0E7C7B;--kt:#E4F4F3">
+          <div class="dx-kpi-top"><span class="dx-label">Open tables</span><i class="dx-kpi-ico"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="5" rx="2"/><path d="M6 13v6M18 13v6"/></svg></i></div>
+          <div class="dx-kpi-val" id="statOpenTables">0</div>
+          <div class="dx-sub" id="statTablesSub">Currently in service</div>
+        </div>
+
+        <!-- FLOOR / TOP SELLERS / KITCHEN -->
+        <section class="dx-card dx-floor">
+          <div class="dx-card-head"><h2>Floor status</h2><span class="dx-pill" id="dashFloorSummary"></span></div>
+          <div class="dx-floor-body">
+            <div class="dx-ring" id="dashFloorRing"></div>
+            <div class="dx-floor-grid" id="dashFloorStrip"></div>
+          </div>
+        </section>
+        <section class="dx-card dx-top">
+          <div class="dx-card-head"><h2>Top sellers</h2><div class="dx-head-right"><span class="dx-pill" id="dashTopCount"></span><div class="dx-seg" id="dashTopRange"></div></div></div>
+          <div class="dx-body" id="dashTopItems"></div>
+        </section>
+        <section class="dx-card dx-kds">
+          <div class="dx-card-head"><h2>Kitchen queue</h2><span class="dx-pill" id="dashKdsCount"></span></div>
+          <div class="dx-body" id="dashKdsQueue"></div>
+        </section>
+
+        <!-- WEEK / PAYMENTS / RECENT BILLS -->
+        <section class="dx-card dx-week">
+          <div class="dx-card-head"><h2>Last 7 days</h2><span class="dx-pill" id="dashWeekTotal"></span></div>
+          <div class="dx-week-chart" id="dashWeekChart"></div>
+          <div class="dx-week-foot" id="dashWeekFoot"></div>
+        </section>
+        <section class="dx-card dx-pay">
+          <div class="dx-card-head"><h2>Payments</h2><div class="dx-seg" id="dashPayRange"></div></div>
+          <div class="dx-body" id="dashPayMix"></div>
+        </section>
+        <section class="dx-card dx-recent">
+          <div class="dx-card-head"><h2>Recent bills</h2><button class="dx-link" id="dashRecentAllBtn">See all</button></div>
+          <div class="dx-body" id="dashRecentBills"></div>
+        </section>
+
+        <!-- STAFF / RESERVATIONS -->
+        <section class="dx-card dx-staff">
+          <div class="dx-card-head"><h2>Staff on duty</h2><span class="dx-pill" id="dashStaffSummary"></span></div>
+          <div class="dx-body" id="dashStaffDuty"></div>
+        </section>
+        <section class="dx-card dx-res">
+          <div class="dx-card-head"><h2>Reservations today</h2><span class="dx-pill" id="dashResCount"></span></div>
+          <div class="dx-body" id="dashReservations"></div>
+        </section>
+
+      </div>
+    </section>
+
+    <!-- TABLES & ORDERS -->
+    <section id="view-tables" class="view">
+      <header class="view-header tb-head">
+        <div>
+          <h1>Tables &amp; Orders</h1>
+          <p class="view-sub">Tap a table to open it or start a new order.</p>
+        </div>
+        <div class="view-header-actions">
+          <button class="btn-ghost" id="manageFloorsBtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12M9 21v-6h6v6"/></svg>Manage floors</button>
+          <button class="btn-ghost tb-add" id="addTableBtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add table</button>
+        </div>
+      </header>
+      <div class="floor-bar">
+        <div class="floor-stats" id="floorStats" aria-live="polite"></div>
+        <div class="floor-tabs" id="floorTabs"></div>
+      </div>
+      <div id="tableGrid" class="table-grid"></div>
+    </section>
+
+    <!-- ORDER TAKING (table detail) -->
+    <section id="view-order" class="view">
+      <header class="view-header od-head">
+        <div class="od-title">
+          <button class="btn-ghost od-back" id="backToTables"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>All tables</button>
+          <div class="od-name">
+            <h1 id="orderTableName">—</h1>
+            <span class="od-state" id="orderTableEyebrow">Table</span>
+          </div>
+        </div>
+        <div class="menu-search od-search">
+          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>
+          <input type="text" id="menuSearchInput" placeholder="Search menu…" autocomplete="off">
+        </div>
+      </header>
+
+      <div class="order-layout">
+        <div class="order-menu-pick">
+          <div id="menuBreadcrumb" class="menu-breadcrumb hidden">
+            <button class="mbc-back" id="menuBackBtn">← Categories</button>
+            <span class="mbc-title" id="menuBreadcrumbTitle"></span>
+          </div>
+          <div id="menuCatGrid" class="cat-box-grid"></div>
+          <div id="menuPickGrid" class="menu-pick-grid"></div>
+        </div>
+
+        <div class="order-cart" id="orderCartPanel">
+          <div class="cart-head">
+            <div class="cart-head-main">
+              <span class="cart-head-title">Current order</span>
+              <span class="cart-count" id="cartCountBadge">Empty</span>
+            </div>
+            <button class="cart-close" id="cartCloseBtn" aria-label="Close order">×</button>
+          </div>
+          <div class="ordertype-toggle" id="orderTypeToggle">
+            <button type="button" class="ot-btn" data-ordertype="dinein"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v7a2 2 0 0 0 2 2v9M10 3v7M8 3v5M18 3c-2 1-3 3.5-3 6s1 3 3 3v9"/></svg>Dine-in</button>
+            <button type="button" class="ot-btn" data-ordertype="takeaway"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 0 1 6 0v2"/></svg>Takeaway</button>
+          </div>
+          <div class="paymode-toggle" id="payModeToggle">
+            <span class="paymode-label">Payment</span>
+            <button type="button" class="pm-btn" data-paymode="cash"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.5"/></svg>Cash</button>
+            <button type="button" class="pm-btn" data-paymode="card"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M7 15h3"/></svg>Card</button>
+            <button type="button" class="pm-btn" data-paymode="upi"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/></svg>UPI</button>
+          </div>
+          <div id="cartList" class="cart-list"></div>
+          <div class="cart-customer">
+            <input type="text" id="orderCustName" placeholder="Customer name">
+            <input type="tel" id="orderCustPhone" placeholder="Phone (for WhatsApp bill)">
+          </div>
+          <div class="cart-dock">
+            <div class="cart-totals">
+              <div class="ct-row"><span>Subtotal</span><span id="cartSubtotal">₹0.00</span></div>
+              <div class="ct-row"><span id="cgstLabel">CGST</span><span id="cartCgst">₹0.00</span></div>
+              <div class="ct-row"><span id="sgstLabel">SGST</span><span id="cartSgst">₹0.00</span></div>
+              <div class="ct-row discount-row">
+                <span>Discount ₹</span>
+                <input type="number" id="cartDiscount" value="0" min="0">
+              </div>
+              <div class="ct-row total-row"><span>Total</span><span id="cartTotal">₹0.00</span></div>
+            </div>
+            <div class="cart-actions">
+              <div class="cart-tools">
+                <button type="button" class="btn-ghost" id="transferTableBtn" title="Transfer table" aria-label="Transfer table"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg>Transfer table</button>
+                <button type="button" class="btn-ghost" id="splitBillBtn" title="Split bill" aria-label="Split bill"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>Split bill</button>
+              </div>
+              <button class="btn-ghost" id="saveOrderBtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/></svg>Save order (KOT)</button>
+              <button class="btn-primary" id="generateBillBtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Generate GST bill</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mobile-cart-bar" id="mobileCartBar">
+        <div><div class="mcb-left" id="mcbCount">0 items</div><div class="mcb-total" id="mcbTotal">₹0.00</div></div>
+        <span class="mcb-btn">View order</span>
+      </div>
+
+      <div id="staffUpsellPrompt" class="staff-upsell hidden">
+        <div class="staff-upsell-head">
+          <span class="staff-upsell-badge">✨ Goes great together</span>
+          <button id="staffUpsellCloseBtn" class="staff-upsell-x">×</button>
+        </div>
+        <div id="staffUpsellItems" class="staff-upsell-items"></div>
+      </div>
+    </section>
+
+    <!-- MENU BUILDER -->
+    <section id="view-menu" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Catalog</div><h1>Menu Builder</h1><p class="view-sub">Build your categories, items, variants and add-ons.</p></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-ghost" id="mergeCatsBtn" title="Find categories that mean the same thing and combine them">Merge duplicate categories</button>
+          <button class="btn-primary" id="addItemBtn">+ Add item</button>
+        </div>
+      </header>
+      <div class="mb-toolbar">
+        <div class="mb-search"><span class="mb-search-ico">⌕</span><input type="text" id="mbSearchInput" placeholder="Search menu items…"></div>
+        <div class="mb-count" id="mbItemCount"></div>
+      </div>
+      <div class="mb-layout">
+        <div class="mb-cat-rail" id="mbCatRail"></div>
+        <div class="mb-items" id="menuBuilderList"></div>
+      </div>
+    </section>
+
+    <!-- STOCK MANAGEMENT -->
+    <!-- KITCHEN DISPLAY (KDS) -->
+    <section id="view-kds" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Live</div><h1>Kitchen Display</h1><p class="view-sub">Follow every order from new to ready.</p></div>
+        <div class="view-header-actions">
+          <button class="btn-ghost" id="kdsLangToggle" title="Switch kitchen display language">🌐 हिंदी</button>
+          <label class="kds-sound-toggle"><input type="checkbox" id="kdsSoundToggle" checked> 🔔 New order sound</label>
+        </div>
+      </header>
+      <div class="stat-grid stat-grid-3">
+        <div class="stat-card"><div class="stat-label">New</div><div class="stat-value" id="kdsStatNew">0</div></div>
+        <div class="stat-card"><div class="stat-label">Preparing</div><div class="stat-value" id="kdsStatPreparing">0</div></div>
+        <div class="stat-card"><div class="stat-label">Ready</div><div class="stat-value" id="kdsStatReady">0</div></div>
+      </div>
+      <div class="kds-board" id="kdsBoard">
+        <div class="kds-col" data-status="new">
+          <div class="kds-col-head"><span>🆕 New</span><span class="kds-col-count" id="kdsColCountNew">0</span></div>
+          <div class="kds-col-body" id="kdsColNew"></div>
+        </div>
+        <div class="kds-col" data-status="preparing">
+          <div class="kds-col-head"><span>🔥 Preparing</span><span class="kds-col-count" id="kdsColCountPreparing">0</span></div>
+          <div class="kds-col-body" id="kdsColPreparing"></div>
+        </div>
+        <div class="kds-col" data-status="ready">
+          <div class="kds-col-head"><span>✅ Ready</span><span class="kds-col-count" id="kdsColCountReady">0</span></div>
+          <div class="kds-col-body" id="kdsColReady"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SALES SUMMARY -->
+    <section id="view-sales" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Business</div><h1>Sales Summary</h1><p class="view-sub">See how today, this week and this month are trending.</p></div>
+      </header>
+      <div class="sales-period-toggle" id="salesPeriodToggle">
+        <button type="button" class="sp-btn active" data-period="day">Today</button>
+        <button type="button" class="sp-btn" data-period="week">This week</button>
+        <button type="button" class="sp-btn" data-period="month">This month</button>
+        <button type="button" class="sp-btn" data-period="year">This year</button>
+      </div>
+      <div class="hist-bar" id="histBar"></div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total sales</div><div class="stat-value" id="salesStatTotal">₹0</div></div>
+        <div class="stat-card"><div class="stat-label">Bills</div><div class="stat-value" id="salesStatBills">0</div></div>
+        <div class="stat-card"><div class="stat-label">Avg. bill value</div><div class="stat-value" id="salesStatAvg">₹0</div></div>
+        <div class="stat-card"><div class="stat-label">Discounts given</div><div class="stat-value" id="salesStatDiscount">₹0</div></div>
+      </div>
+      <div class="panel sales-chart-panel">
+        <div class="panel-head">
+          <h2>Sales trend</h2>
+          <div class="trend-badge" id="salesTrendBadge"></div>
+        </div>
+        <div id="salesChartWrap" class="trend-chart-wrap"></div>
+      </div>
+
+      <div class="sales-split-row">
+        <div class="panel sales-pay-panel">
+          <div class="panel-head"><h2>Payment split</h2></div>
+          <div id="salesPaySplit" class="pay-split-list"></div>
+          <div id="salesPayTrends" class="mini-trend-row"></div>
+        </div>
+        <div class="panel sales-top-panel">
+          <div class="panel-head"><h2>Top 5 items</h2></div>
+          <div id="salesTopItems" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EXPENSES & CASH REGISTER -->
+    <section id="view-expenses" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Business</div><h1>Expenses &amp; Cash Register</h1><p class="view-sub">Log spending and keep your cash drawer in check.</p></div>
+        <button class="btn-primary" id="addExpenseBtn">+ Add expense</button>
+      </header>
+      <div class="stat-grid stat-grid-4">
+        <div class="stat-card"><div class="stat-label">Cash sales today</div><div class="stat-value" id="expStatCashSales">₹0</div></div>
+        <div class="stat-card"><div class="stat-label">Expenses today</div><div class="stat-value" id="expStatToday">₹0</div></div>
+        <div class="stat-card"><div class="stat-label">Est. cash in hand</div><div class="stat-value" id="expStatCashInHand">₹0</div></div>
+        <div class="stat-card"><div class="stat-label">Expenses this month</div><div class="stat-value" id="expStatMonth">₹0</div></div>
+      </div>
+      <div class="sales-period-toggle" id="expPeriodToggle">
+        <button type="button" class="sp-btn active" data-period="day">Today</button>
+        <button type="button" class="sp-btn" data-period="week">This week</button>
+        <button type="button" class="sp-btn" data-period="month">This month</button>
+      </div>
+      <div class="sales-split-row">
+        <div class="panel sales-pay-panel">
+          <div class="panel-head"><h2>By category</h2></div>
+          <div id="expCategorySplit" class="pay-split-list"></div>
+        </div>
+        <div class="panel sales-top-panel">
+          <div class="panel-head panel-head-row"><h2>Expense log</h2><span class="mb-count" id="expCount"></span></div>
+          <div id="expenseList" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RESERVATIONS & WAITLIST -->
+    <section id="view-reservations" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Front of house</div><h1>Reservations &amp; Waitlist</h1><p class="view-sub">Manage bookings and walk-in waiting guests.</p></div>
+        <div class="view-header-actions">
+          <button class="btn-ghost" id="addWaitlistBtn">+ Add to waitlist</button>
+          <button class="btn-primary" id="addReservationBtn">+ New reservation</button>
+        </div>
+      </header>
+      <div class="stat-grid stat-grid-3">
+        <div class="stat-card"><div class="stat-label">Today's reservations</div><div class="stat-value" id="resStatToday">0</div></div>
+        <div class="stat-card"><div class="stat-label">On waitlist now</div><div class="stat-value" id="resStatWaitlist">0</div></div>
+        <div class="stat-card"><div class="stat-label">Upcoming this week</div><div class="stat-value" id="resStatWeek">0</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>🕒 Waitlist</h2></div>
+        <div id="waitlistList" class="list"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head panel-head-row">
+          <h2>Reservations</h2>
+          <input type="date" id="resDateFilter" class="res-date-input">
+        </div>
+        <div id="reservationsList" class="list"></div>
+      </div>
+    </section>
+
+    <!-- QR TABLE ORDERING -->
+    <section id="view-qrorder" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Self-service</div><h1>QR Table Ordering</h1><p class="view-sub">Let guests order from their table with a QR code.</p></div>
+        <div class="view-header-actions">
+          <button class="btn-ghost" id="waiterLangToggle" title="Switch waiter-call language">🌐 हिंदी</button>
+          <label class="kds-sound-toggle"><input type="checkbox" id="qrOrderingEnabledToggle"> Enable customer ordering</label>
+        </div>
+      </header>
+      <div class="panel" id="qrTableRequestsPanel">
+        <div class="panel-head panel-head-row"><h2>🔔 Waiter calls</h2><span class="mb-count" id="qrTableRequestsCount"></span></div>
+        <p class="qr-help-text">Customers can tap "Call waiter" anytime from their ordering screen. Requests show up here by table and floor until you mark them resolved.</p>
+        <div id="qrTableRequestsList" class="list"></div>
+      </div>
+      <div class="panel" id="qrIncomingPanel">
+        <div class="panel-head panel-head-row"><h2>📥 Incoming customer orders</h2><span class="mb-count" id="qrIncomingCount"></span></div>
+        <div id="qrIncomingList" class="list"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Table QR codes</h2></div>
+        <p class="qr-help-text">Print and place these on each table. Customers scan, browse your live menu, and send orders straight to this dashboard for approval.</p>
+        <div id="qrTableGrid" class="qr-table-grid"></div>
+      </div>
+    </section>
+
+    <!-- BILL HISTORY -->
+    <section id="view-bills" class="view">
+      <header class="view-header">
+        <div><div class="eyebrow">Records</div><h1>Bill History</h1><p class="view-sub">Review every bill you have issued.</p></div>
+      </header>
+      <p id="billWindowNote" class="ob-note"></p>
+      <section class="ob-panel" id="olderBillsPanel">
+        <h2>🔎 Search older bills</h2>
+        <p>Older bills stay safely stored in the cloud — they just aren't loaded automatically. Search by date range, bill number, phone number or customer name. Each search reads at most 300 bills.</p>
+        <div class="ob-form">
+          <label>From<input type="date" id="olderFrom"></label>
+          <label>To<input type="date" id="olderTo"></label>
+          <label class="ob-grow">Bill no. / phone / name (optional)<input type="text" id="olderQuery" placeholder="e.g. 1042 · 98765 43210 · Rahul" autocomplete="off"></label>
+          <button class="btn-primary" id="olderSearchBtn" type="button">Search</button>
+        </div>
+        <div id="olderBillsMsg" class="ob-msg"></div>
+        <div id="olderBillsList" class="list"></div>
+        <button class="btn-ghost hidden" id="olderMoreBtn" type="button">Load next 300</button>
+      </section>
+      <div id="billHistoryList" class="list"></div>
+    </section>
+
+
+    <!-- STAFF MANAGEMENT (locked) -->
+    <section id="view-staff" class="view">
+
+      <!-- LOCK SCREEN -->
+      <div id="staffLockScreen" class="staff-lock-screen">
+        <div class="staff-lock-card">
+          <div class="staff-lock-ico">🔒</div>
+          <h2 id="staffLockTitle">Staff area is locked</h2>
+          <p id="staffLockSub" class="staff-lock-sub">Enter the owner's staff password to view staff, attendance and leave records.</p>
+          <input type="password" id="staffLockInput" placeholder="Password" autocomplete="off">
+          <div id="staffLockConfirmWrap" class="hidden">
+            <input type="password" id="staffLockConfirmInput" placeholder="Confirm password" autocomplete="off">
+          </div>
+          <div id="staffLockError" class="staff-lock-error hidden"></div>
+          <button class="btn-primary" id="staffLockSubmitBtn">Unlock</button>
+        </div>
+      </div>
+
+      <!-- UNLOCKED CONTENT -->
+      <div id="staffContent" class="hidden">
+        <header class="view-header">
+          <div><div class="eyebrow">Team</div><h1>Staff Management</h1><p class="view-sub">Manage your team, attendance and payroll.</p></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-ghost" id="staffChangePassBtn">🔑 Change password</button>
+            <button class="btn-ghost" id="staffLockNowBtn">🔒 Lock now</button>
+            <button class="btn-primary" id="addStaffBtn">+ Add staff</button>
+          </div>
+        </header>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">Total staff</div><div class="stat-value" id="staffStatTotal">0</div></div>
+          <div class="stat-card"><div class="stat-label">Present today</div><div class="stat-value" id="staffStatPresent">0</div></div>
+          <div class="stat-card"><div class="stat-label">On leave today</div><div class="stat-value" id="staffStatLeave">0</div></div>
+          <div class="stat-card"><div class="stat-label">Absent today</div><div class="stat-value" id="staffStatAbsent">0</div></div>
+        </div>
+
+        <div id="staffGrid" class="staff-grid"></div>
+
+        <!-- PAYROLL & TIP POOL -->
+        <div class="payroll-card">
+          <div class="payroll-head">
+            <div><div class="eyebrow">Money</div><h2>💰 Payroll &amp; tip pool</h2>
+              <p>Auto-calculated from this month's attendance. Salary is treated as a monthly figure and split into a per-day rate (÷30).</p>
+            </div>
+            <input type="month" id="payrollMonthInput">
+          </div>
+          <label class="payroll-tip-input">Total tips collected this month (₹)
+            <input type="number" id="payrollTipPool" min="0" step="1" placeholder="0">
+          </label>
+          <p class="payroll-tip-hint">Tips are split across staff in proportion to days worked that month (a half-day counts as 0.5).</p>
+          <div class="payroll-table-wrap">
+            <table class="payroll-table">
+              <thead><tr><th>Staff</th><th>Present</th><th>Half-day</th><th>Leave/Absent</th><th>Base pay</th><th>Tip share</th><th>Total payable</th></tr></thead>
+              <tbody id="payrollTableBody"></tbody>
+              <tfoot><tr><td colspan="4">Total</td><td id="payrollTotalBase">₹0</td><td id="payrollTotalTip">₹0</td><td id="payrollTotalPayable">₹0</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view">
+      <div class="settings-wrap st-wrap">
+
+        <header class="st-top">
+          <div>
+            <h1>Settings</h1>
+            <p>Everything that shapes how your bills, tickets and receipts look and behave.</p>
+          </div>
+        </header>
+
+        <div class="st-status" id="settingsStatusStrip">
+          <button type="button" class="sst-chip" id="sstTax" data-jump="st-identity">
+            <span class="sst-ico sst-ico-tax"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="7.5" r="2"/><circle cx="16.5" cy="16.5" r="2"/><path d="M19 5L5 19"/></svg></span>
+            <span class="sst-text"><span class="sst-label">Tax on bills</span><span class="sst-value" id="sstTaxValue">—</span></span>
+          </button>
+          <button type="button" class="sst-chip" id="sstPrinter" data-jump="st-kot">
+            <span class="sst-ico sst-ico-printer"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/></svg></span>
+            <span class="sst-text"><span class="sst-label">Kitchen printer</span><span class="sst-value" id="sstPrinterValue">Not connected</span></span>
+          </button>
+        </div>
+
+        <div class="st-layout">
+          <nav class="st-nav" id="stNav" aria-label="Settings sections">
+            <button type="button" data-jump="st-identity" class="on"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0A2.7 2.7 0 0 0 20 9M10 20v-5h4v5"/></svg>Restaurant</button>
+            <button type="button" data-jump="st-print"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17L17 3l4 4L7 21zM8 12l2 2M11 9l2 2M14 6l2 2"/></svg>Bill printing</button>
+            <button type="button" data-jump="st-kot"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/></svg>Kitchen printer</button>
+            <button type="button" data-jump="st-sound"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg>Sounds</button>
+            <button type="button" data-jump="st-kitchen"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 8.5a4.5 4.5 0 0 1 .5 9z"/></svg>Kitchen mode</button>
+          </nav>
+
+          <div class="st-main">
+
+            <article class="st-card" id="st-identity">
+              <div class="st-head">
+              <span class="st-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0A2.7 2.7 0 0 0 20 9M10 20v-5h4v5"/></svg></span>
+              <div><h2>Restaurant identity</h2><p>Shown on every printed bill and KOT.</p></div>
+            </div>
+              <div class="st-body">
+                <div class="st-grid">
+                  <label class="st-field">Restaurant name <input type="text" id="setName"></label>
+                  <label class="st-field">Phone <input type="text" id="setPhone"></label>
+                  <label class="st-field st-wide">Address <textarea id="setAddress" rows="2"></textarea></label>
+                </div>
+                <div class="st-sub">Tax and bill footer</div>
+                <div class="st-grid">
+                  <label class="st-field">GSTIN <input type="text" id="setGstin" placeholder="22AAAAA0000A1Z5"></label>
+                  <label class="st-field">Bill footer note <input type="text" id="setFooter" placeholder="Thank you, visit again!"></label>
+                  <label class="st-field">CGST % <input type="number" id="setCgst" value="2.5" step="0.1"></label>
+                  <label class="st-field">SGST % <input type="number" id="setSgst" value="2.5" step="0.1"></label>
+                </div>
+              </div>
+              <div class="st-foot"><button class="btn-primary" id="saveSettingsBtn">Save settings</button></div>
+            </article>
+
+            <article class="st-card" id="st-print">
+              <div class="st-head">
+              <span class="st-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17L17 3l4 4L7 21zM8 12l2 2M11 9l2 2M14 6l2 2"/></svg></span>
+              <div><h2>Bill print settings</h2><p>Set paper size, margin and scale once.</p></div>
+            </div>
+              <div class="st-body">
+                <label class="st-field">Paper preset
+                  <select id="ppPreset">
+                    <option value="roll80">80mm thermal roll (80 × 297mm, continuous)</option>
+                    <option value="roll58">58mm thermal roll (58 × 210mm, continuous)</option>
+                    <option value="card4x6">4 × 6 inch (101.6 × 152.4mm)</option>
+                    <option value="a4half">A4 half page (148 × 210mm)</option>
+                    <option value="custom">Custom size…</option>
+                  </select>
+                </label>
+                <div class="st-grid st-grid-4">
+                  <label class="st-field">Width (mm) <input type="number" id="ppWidth" step="0.1" min="20"></label>
+                  <label class="st-field">Height (mm) <input type="number" id="ppHeight" step="0.1" min="0" placeholder="Auto (roll)"></label>
+                  <label class="st-field">Margin (mm) <input type="number" id="ppMargin" step="0.5" min="0"></label>
+                  <label class="st-field">Print scale (%) <input type="number" id="ppScale" step="5" min="50" max="200"></label>
+                </div>
+                <label class="st-field st-narrow">Copies per bill <input type="number" id="ppCopies" min="1" max="5" value="1"></label>
+                <div class="ppreset-hint" id="ppresetHint"></div>
+              </div>
+              <div class="st-foot"><button class="btn-primary" id="savePrintSettingsBtn">Save print settings</button></div>
+            </article>
+
+            <article class="st-card" id="st-kot">
+              <div class="st-head">
+              <span class="st-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/></svg></span>
+              <div><h2>Kitchen printer (KOT)</h2><p>Auto-print kitchen tickets the moment an order is saved.</p></div>
+            </div>
+              <div class="st-body">
+                <div class="st-printer-row">
+                  <div id="kotPrinterStatus" class="printer-status">Not connected</div>
+                  <div class="printer-btn-row">
+                    <button class="btn-ghost" id="connectPrinterBtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/></svg>Connect printer</button>
+                    <button class="btn-ghost" id="testPrintBtn">Test print</button>
+                    <button class="btn-ghost" id="disconnectPrinterBtn" style="display:none;">Disconnect</button>
+                  </div>
+                </div>
+                <p class="printer-help">Connect a Bluetooth thermal printer. Works in Chrome or Edge (desktop &amp; Android). If no printer is connected, a print window opens automatically instead.</p>
+              </div>
+            </article>
+
+            <article class="st-card" id="st-sound">
+              <div class="st-head">
+              <span class="st-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15zM10 21h4"/></svg></span>
+              <div><h2>Notification sounds</h2><p>Choose a ringtone for each alert. Every sound plays instantly, no download needed.</p></div>
+            </div>
+              <div class="st-body">
+                <div id="notifSoundRows" class="notif-sound-rows"></div>
+                <label class="notif-vol-label">Volume
+                  <input type="range" id="notifVolumeRange" min="10" max="100" step="5">
+                </label>
+                <label class="st-switch">
+                  <input type="checkbox" id="notifSoundToggle">
+                  <span class="st-switch-ui" aria-hidden="true"></span>
+                  <span class="st-switch-text"><b>Enable sound notifications</b><small>Play alerts for waiter calls, QR orders and new kitchen tickets.</small></span>
+                </label>
+              </div>
+            </article>
+
+            <article class="st-card" id="st-kitchen">
+              <div class="st-head">
+              <span class="st-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 0 1-.6-7.96A5.5 5.5 0 0 1 17 8.5a4.5 4.5 0 0 1 .5 9z"/></svg></span>
+              <div><h2>Cloud kitchen mode</h2><p>Running delivery-only with no dine-in? Simplify the dashboard to order intake, kitchen display and a packaging checklist.</p></div>
+            </div>
+              <div class="st-body">
+                <label class="st-switch">
+                  <input type="checkbox" id="darkKitchenToggle">
+                  <span class="st-switch-ui" aria-hidden="true"></span>
+                  <span class="st-switch-text"><b>This is a delivery or takeaway-only kitchen</b><small>Hides Tables &amp; Orders and the floor map. Every takeaway, delivery, Swiggy and Zomato ticket on the Kitchen Display gets a “Mark packed” step before it can be cleared, so nothing leaves the kitchen unpacked.</small></span>
+                </label>
+              </div>
+            </article>
+
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ ITEM MODAL ============ -->
+<div id="itemModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="itemModalTitle">Add menu item</h2><button class="modal-x" id="itemModalClose">×</button></div>
+    <label>Item name <input type="text" id="itmName" placeholder="Margherita Pizza"></label>
+    <label>Category
+      <select id="itmCategorySelect"></select>
+    </label>
+    <label>Type
+      <div class="veg-toggle" id="itmVegToggle">
+        <button type="button" class="veg-btn" data-veg="veg"><span class="veg-dot veg"></span>Veg</button>
+        <button type="button" class="veg-btn" data-veg="nonveg"><span class="veg-dot nonveg"></span>Non-veg</button>
+      </div>
+    </label>
+    <label>Base price (if no size variants) ₹ <input type="number" id="itmBasePrice" value="0"></label>
+
+    <div class="sub-block">
+      <div class="sub-block-head">Size / variant options <button class="btn-mini" id="addVariantRow">+ add</button></div>
+      <div id="variantRows"></div>
+    </div>
+
+    <div class="sub-block">
+      <div class="sub-block-head">Add-ons / toppings / sauces <button class="btn-mini" id="addAddonRow">+ add</button></div>
+      <div id="addonRows"></div>
+    </div>
+
+    <div class="sub-block">
+      <div class="sub-block-head">🎯 Suggest with this item (upsell)</div>
+      <p class="upsell-hint">When a customer adds this item on the QR menu, these get suggested as a one-tap add-on — e.g. fries &amp; a drink with a burger.</p>
+      <div id="upsellPickerList" class="upsell-picker-list"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteItemBtn">Delete</button>
+      <button class="btn-primary" id="saveItemBtn">Save item</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ EXPENSE MODAL ============ -->
+<div id="expenseModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="expenseModalTitle">Add expense</h2><button class="modal-x" id="expenseModalClose">×</button></div>
+    <label>What was it for <input type="text" id="expDesc" placeholder="e.g. Vegetable purchase, LPG cylinder"></label>
+    <div class="two-col">
+      <label>Amount ₹ <input type="number" id="expAmount" value="" step="0.01" placeholder="0"></label>
+      <label>Category
+        <select id="expCategory">
+          <option>Groceries &amp; Ingredients</option>
+          <option>Rent</option>
+          <option>Utilities (electricity/gas/water)</option>
+          <option>Staff wages</option>
+          <option>Maintenance &amp; Repairs</option>
+          <option>Marketing</option>
+          <option>Transport</option>
+          <option>Miscellaneous</option>
+        </select>
+      </label>
+    </div>
+    <label>Paid via
+      <select id="expPaymentMode">
+        <option value="cash">Cash</option>
+        <option value="upi">UPI</option>
+        <option value="card">Card</option>
+        <option value="bank">Bank transfer</option>
+      </select>
+    </label>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteExpenseBtn">Delete</button>
+      <button class="btn-primary" id="saveExpenseBtn">Save expense</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ RESERVATION MODAL ============ -->
+<div id="reservationModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="reservationModalTitle">New reservation</h2><button class="modal-x" id="reservationModalClose">×</button></div>
+    <label>Guest name <input type="text" id="resName" placeholder="Guest name"></label>
+    <label>Phone <input type="tel" id="resPhone" placeholder="10-digit mobile number"></label>
+    <div class="two-col">
+      <label>Party size <input type="number" id="resPartySize" value="2" min="1"></label>
+      <label>Preferred table (optional)
+        <select id="resTable"><option value="">Any / not assigned</option></select>
+      </label>
+    </div>
+    <div class="two-col">
+      <label>Date <input type="date" id="resDate"></label>
+      <label>Time <input type="time" id="resTime"></label>
+    </div>
+    <label>Notes (optional) <input type="text" id="resNotes" placeholder="e.g. Window seat, birthday cake"></label>
+    <div class="two-col" id="resStatusActions">
+      <button class="btn-ghost" id="resMarkCancelledBtn">Cancel booking</button>
+      <button class="btn-ghost" id="resMarkCompletedBtn">Mark completed</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteReservationBtn">Delete</button>
+      <button class="btn-primary" id="saveReservationBtn">Save reservation</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ WAITLIST MODAL ============ -->
+<div id="waitlistModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2>Add to waitlist</h2><button class="modal-x" id="waitlistModalClose">×</button></div>
+    <label>Guest name <input type="text" id="wlName" placeholder="Guest name"></label>
+    <label>Phone <input type="tel" id="wlPhone" placeholder="10-digit mobile number"></label>
+    <label>Party size <input type="number" id="wlPartySize" value="2" min="1"></label>
+    <div class="modal-actions">
+      <button class="btn-primary" id="saveWaitlistBtn">Add to waitlist</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STOCK ITEM MODAL ============ -->
+<div id="stockModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="stockModalTitle">Add stock item</h2><button class="modal-x" id="stockModalClose">×</button></div>
+    <label>Item name <input type="text" id="stkName" placeholder="Basmati Rice"></label>
+    <div class="two-col">
+      <label>Quantity in stock <input type="number" id="stkQty" value="0" step="0.01"></label>
+      <label>Unit
+        <select id="stkUnit">
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="l">litre</option>
+          <option value="ml">ml</option>
+          <option value="pcs">pcs</option>
+          <option value="pkt">packet</option>
+          <option value="box">box</option>
+        </select>
+      </label>
+    </div>
+    <div class="two-col">
+      <label>Low-stock alert below <input type="number" id="stkLowAt" value="0" step="0.01"></label>
+      <label>Cost per unit ₹ <input type="number" id="stkCostPerUnit" value="0" step="0.01"></label>
+    </div>
+    <label>Supplier / notes (optional) <input type="text" id="stkSupplier" placeholder="e.g. Sri Ganesh Traders"></label>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteStockBtn">Delete</button>
+      <button class="btn-primary" id="saveStockBtn">Save stock item</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STAFF MODAL ============ -->
+<div id="staffModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="staffModalTitle">Add staff member</h2><button class="modal-x" id="staffModalClose">×</button></div>
+    <label>Full name <input type="text" id="stfName" placeholder="Ramesh Kumar"></label>
+    <div class="two-col">
+      <label>Role <input type="text" id="stfRole" placeholder="Waiter / Chef / Cashier"></label>
+      <label>Phone <input type="tel" id="stfPhone" placeholder="9876543210"></label>
+    </div>
+    <div class="two-col">
+      <label>Monthly salary ₹ <input type="number" id="stfSalary" value="0" step="100"></label>
+      <label>Date of joining <input type="date" id="stfJoinDate"></label>
+    </div>
+    <label>Notes (optional) <input type="text" id="stfNotes" placeholder="e.g. shift timing, ID proof"></label>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteStaffBtn">Delete</button>
+      <button class="btn-primary" id="saveStaffBtn">Save staff member</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STAFF ATTENDANCE CALENDAR MODAL ============ -->
+<div id="attendanceModal" class="modal hidden">
+  <div class="modal-card attendance-modal-card">
+    <div class="modal-head"><h2 id="attendanceModalTitle">Attendance</h2><button class="modal-x" id="attendanceModalClose">×</button></div>
+
+    <div class="att-cal-toolbar">
+      <button class="btn-mini" id="attCalPrevBtn">←</button>
+      <span class="att-cal-month" id="attCalMonthLabel">—</span>
+      <button class="btn-mini" id="attCalNextBtn">→</button>
+    </div>
+
+    <div class="att-cal-legend">
+      <span><span class="att-dot present"></span>Present</span>
+      <span><span class="att-dot halfday"></span>Half-day</span>
+      <span><span class="att-dot leave"></span>Leave</span>
+      <span><span class="att-dot absent"></span>Absent</span>
+      <span><span class="att-dot none"></span>Not marked</span>
+    </div>
+
+    <div class="att-cal-weekdays">
+      <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+    </div>
+    <div id="attCalGrid" class="att-cal-grid"></div>
+
+    <div class="att-cal-summary" id="attCalSummary"></div>
+  </div>
+</div>
+
+<!-- ============ ITEM PICK MODAL (order taking) ============ -->
+<div id="pickModal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="pickModalTitle">Item</h2><button class="modal-x" id="pickModalClose">×</button></div>
+    <div id="pickVariantSection" class="sub-block hidden">
+      <div class="sub-block-head">Choose size</div>
+      <div id="pickVariantOptions" class="option-chips"></div>
+    </div>
+    <div id="pickAddonSection" class="sub-block hidden">
+      <div class="sub-block-head">Add-ons / toppings</div>
+      <div id="pickAddonOptions" class="option-chips multi"></div>
+    </div>
+    <div class="pick-qty-row">
+      <span class="pick-qty-label">Qty</span>
+      <div class="pick-qty-stepper">
+        <button type="button" id="pickQtyMinus" aria-label="Decrease quantity">−</button>
+        <input type="number" id="pickQty" value="1" min="1" inputmode="numeric" aria-label="Quantity">
+        <button type="button" id="pickQtyPlus" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+    <label>Notes (optional) <input type="text" id="pickNotes" placeholder="e.g. less spicy, no onion"></label>
+    <div class="modal-actions">
+      <button class="btn-primary" id="pickAddBtn">Add to order</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BILL / PRINT MODAL ============ -->
+<div id="billModal" class="modal hidden">
+  <div class="modal-card bill-modal-card">
+    <div class="modal-head"><h2>Bill ready</h2><button class="modal-x" id="billModalClose">×</button></div>
+    <div id="thermalBill" class="thermal-bill"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="printBillBtn">🖨 Print bill</button>
+      <button class="btn-primary" id="waBillBtn">Send bill on WhatsApp</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CUSTOM PRINT PREVIEW / SETTINGS MODAL ============ -->
+<div id="printPreviewModal" class="modal hidden">
+  <div class="modal-card print-preview-card">
+    <div class="modal-head"><h2>Print</h2><button class="modal-x" id="printPreviewClose">×</button></div>
+
+    <div class="ppv-controls">
+      <label>Paper
+        <select id="ppvPreset">
+          <option value="roll80">80mm roll</option>
+          <option value="roll58">58mm roll</option>
+          <option value="card4x6">4 × 6 in</option>
+          <option value="a4half">A4 half</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <label class="ppv-num">Copies <input type="number" id="ppvCopies" min="1" max="5" value="1"></label>
+      <label class="ppv-num">Scale % <input type="number" id="ppvScale" min="50" max="200" step="5" value="100"></label>
+    </div>
+
+    <div class="ppv-preview-wrap">
+      <div id="ppvPreviewPaper" class="ppv-preview-paper">
+        <div id="ppvPreviewContent" class="thermal-bill"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" id="printPreviewCancel">Cancel</button>
+      <button class="btn-primary" id="ppvPrintBtn">🖨 Print now</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SEAT PICKER MODAL ============ -->
+<div id="seatPickerModal" class="modal hidden">
+  <div class="modal-card seat-picker-card">
+    <div class="modal-head"><h2 id="seatPickerTitle">Table</h2><button class="modal-x" id="seatPickerClose">×</button></div>
+    <p class="seat-picker-help">Tap the chairs your party is sitting in. Chairs already tied to another running order are shown taken — tap one to jump into that party's order.</p>
+
+    <div class="seat-picker-layout">
+      <div class="seat-table-mark">Table</div>
+      <div id="seatPickerChairs" class="seat-chip-grid"></div>
+    </div>
+
+    <div class="seat-picker-legend">
+      <span><span class="seat-dot-legend free"></span>Free</span>
+      <span><span class="seat-dot-legend selected"></span>Selected</span>
+      <span><span class="seat-dot-legend taken"></span>Taken</span>
+    </div>
+
+    <div class="modal-actions seat-picker-actions">
+      <button class="btn-ghost" id="seatPickerSelectAll">Select all free</button>
+      <button class="btn-ghost" id="seatPickerCancel">Cancel</button>
+      <button class="btn-primary" id="seatPickerStartBtn" disabled>Select at least one seat</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ IN-HOUSE CONFIRM / PROMPT MODAL ============ -->
+<div id="confirmModal" class="confirm-modal hidden">
+  <div class="confirm-card">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmMsg"></p>
+    <input type="text" id="confirmInput" class="hidden">
+    <div class="confirm-actions">
+      <button id="confirmCancelBtn">Cancel</button>
+      <button id="confirmOkBtn" class="cf-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TABLE REQUEST NOTIFICATION POPUP ============ -->
+<!-- Shown when a customer taps "We need more tables" from the QR order page.
+     Sits above everything; plays a sound; staff taps OK to acknowledge. -->
+<div id="tableRequestModal" class="tr-modal hidden">
+  <div class="tr-modal-card">
+    <div class="tr-modal-icon">👥</div>
+    <h2 class="tr-modal-title">More Tables Requested</h2>
+    <p class="tr-modal-msg">Guests at <strong id="trTableName">—</strong> need additional seating for a large group. Please go assist them.</p>
+    <button id="trOkBtn" class="tr-ok-btn">OK, I'll go assist</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module" src="app.js"></script>
+<script src="premium.js" defer></script>
+<script src="pos-redesign.js" defer></script>
+</body>
+</html>

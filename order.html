@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Order — Table</title>
+<link rel="icon" type="image/png" href="img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="order.css">
+<link rel="stylesheet" href="premium.css">
+</head>
+<body>
+
+<div id="loadingScreen" class="ord-loading">
+  <div class="ord-spinner"></div>
+  <div>Loading menu…</div>
+</div>
+
+<div id="disabledScreen" class="ord-center hidden">
+  <div class="ord-center-icon">🍽️</div>
+  <h1>Ordering isn't open right now</h1>
+  <p>Please call a staff member to place your order.</p>
+</div>
+
+<div id="errorScreen" class="ord-center hidden">
+  <div class="ord-center-icon">⚠️</div>
+  <h1>Something's not right</h1>
+  <p id="errorMsg">This QR code link looks invalid. Please ask staff for help.</p>
+</div>
+
+<div id="seatScreen" class="ord-center hidden">
+  <div class="ord-center-icon">🪑</div>
+  <h1>Pick your seat(s)</h1>
+  <p>Select everyone in your group at <span id="seatScreenTableName">this table</span>, then tap <strong>Confirm</strong>.</p>
+  <div id="seatGrid" class="ord-seat-grid"></div>
+  <div class="ord-seat-actions">
+    <button id="seatConfirmBtn" class="ord-seat-confirm-btn" disabled>Select at least one seat</button>
+  </div>
+</div>
+
+<div id="app" class="ord-app hidden">
+  <header class="ord-header">
+    <div class="ord-header-top">
+      <div id="restoName" class="ord-resto-name">—</div>
+      <div class="ord-header-right">
+        <button id="trackOrderBtn" class="ord-track-btn hidden" type="button"><i></i>Track order</button>
+        <div class="ord-table-pill">Table <span id="tableNameLabel">—</span> · <span id="seatPillLabel">Seat —</span></div>
+      </div>
+    </div>
+    <div class="ord-cat-tabs" id="catTabs"></div>
+  </header>
+
+  <main class="ord-menu" id="menuList"></main>
+
+  <button id="callWaiterBtn" class="ord-waiter-fab">🔔 Call waiter</button>
+
+  <div id="upsellPrompt" class="ord-upsell hidden">
+    <div class="ord-upsell-head">
+      <span class="ord-upsell-badge">✨ Goes great together</span>
+      <button id="upsellCloseBtn" class="ord-upsell-x">×</button>
+    </div>
+    <div id="upsellItems" class="ord-upsell-items"></div>
+  </div>
+
+  <button id="cartFab" class="ord-cart-fab hidden">
+    <span>🛒 View order</span>
+    <span id="cartFabCount" class="ord-cart-fab-count">0</span>
+  </button>
+
+  <div id="cartDrawer" class="ord-cart-drawer hidden">
+    <div class="ord-cart-head">
+      <h2>Your order</h2>
+      <button id="closeCartBtn" class="ord-x">×</button>
+    </div>
+    <div id="cartItems" class="ord-cart-items"></div>
+    <div class="ord-cart-total-row">
+      <span>Total</span>
+      <span id="cartTotal">₹0</span>
+    </div>
+    <label class="ord-name-label">Your name <span class="ord-required-star">*required</span>
+      <input type="text" id="custNameInput" placeholder="So staff know who ordered" required>
+    </label>
+    <label class="ord-name-label">WhatsApp / mobile number <span class="ord-required-star">*required</span>
+      <input type="tel" id="custPhoneInput" inputmode="numeric" autocomplete="tel" maxlength="14" placeholder="10-digit mobile number" required>
+      <span class="ord-field-hint">We'll send your bill on WhatsApp</span>
+    </label>
+    <button id="placeOrderBtn" class="ord-place-btn">Send order to kitchen</button>
+  </div>
+  <div id="cartOverlay" class="ord-overlay hidden"></div>
+</div>
+
+<div id="trackScreen" class="ord-track hidden">
+  <div class="ord-trk-top">
+    <div id="trackRestoName" class="ord-trk-resto">—</div>
+    <div class="ord-trk-pill">Table <span id="trackTableLabel">—</span></div>
+  </div>
+  <section id="trackHero" class="ord-trk-hero" aria-live="polite">
+    <div id="trackHeroIcon" class="ord-trk-hero-ico">🧾</div>
+    <h1 id="trackHeadline">Checking your order…</h1>
+    <p id="trackSubline"></p>
+  </section>
+  <div id="trackNotice" class="ord-trk-notice hidden"></div>
+  <div id="trackList" class="ord-trk-list"></div>
+  <div class="ord-trk-actions">
+    <button id="orderAgainBtn" class="ord-place-btn">+ Order more</button>
+  </div>
+</div>
+
+<!-- Item detail sheet (variants / add-ons) -->
+<div id="itemSheetOverlay" class="ord-overlay hidden"></div>
+<div id="itemSheet" class="ord-item-sheet hidden">
+  <div class="ord-sheet-head">
+    <h2 id="sheetItemName">Item</h2>
+    <button id="closeSheetBtn" class="ord-x">×</button>
+  </div>
+  <div id="sheetVariants" class="ord-sheet-block"></div>
+  <div id="sheetAddons" class="ord-sheet-block"></div>
+  <div class="ord-qty-row">
+    <span>Quantity</span>
+    <div class="ord-qty-stepper">
+      <button id="sheetQtyMinus">−</button>
+      <span id="sheetQtyVal">1</span>
+      <button id="sheetQtyPlus">+</button>
+    </div>
+  </div>
+  <button id="sheetAddBtn" class="ord-place-btn">Add to order — ₹0</button>
+</div>
+
+<script type="module" src="order.js"></script>
+</body>
+</html>
