@@ -2294,7 +2294,7 @@ $("mbSearchInput").oninput = (e) => { mbSearchTerm = e.target.value.trim().toLow
 function vegIcon(veg) {
   // Small square outline with a coloured dot inside — the familiar
   // veg/non-veg mark used on Indian restaurant menus & POS systems.
-  return `<span class="veg-mark ${veg === "veg" ? "veg" : "nonveg"}"><span></span></span>`;
+  return `<span class="veg-mark ${(veg === "nonveg" || veg === false) ? "nonveg" : "veg"}"><span></span></span>`;
 }
 
 function renderMenuBuilder() {

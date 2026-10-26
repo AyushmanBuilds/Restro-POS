@@ -38,6 +38,24 @@ const restoId = params.get("r");
 const tableName = params.get("t");
 
 let menuCache = [];
+
+// ---- Veg / non-veg ----
+// The menu builder saves veg as the strings "veg" / "nonveg" (older data may
+// use false or "non-veg"), so we normalise instead of comparing to one value.
+const DIET_KEY = "ord_diet_filter";
+let dietFilter = "all";               // "all" | "veg" | "nonveg"
+try { const d = sessionStorage.getItem(DIET_KEY); if (d === "veg" || d === "nonveg") dietFilter = d; } catch (e) {}
+function isNonVeg(i) {
+  const v = i && i.veg;
+  if (v === false) return true;
+  return typeof v === "string" && /^non[\s_-]?veg/i.test(v.trim());
+}
+function dietMatches(i) { return dietFilter === "all" || (dietFilter === "nonveg") === isNonVeg(i); }
+function visibleMenu() { return menuCache.filter(dietMatches); }
+function vegDotHtml(i) {
+  const nv = isNonVeg(i);
+  return `<span class="ord-veg-dot ${nv ? "nonveg" : ""}" role="img" aria-label="${nv ? "Non-veg" : "Veg"}"></span>`;
+}
 let cart = []; // { key, name, variant, variantPrice, addons:[{name,price}], qty, note }
 let activeSheetItem = null;
 let sheetVariant = null;
@@ -167,6 +185,7 @@ $("seatConfirmBtn").onclick = () => {
   const sorted = [...selectedSeats].sort();
   const labels = sorted.map(s => s.toUpperCase()).join(", ");
   $("seatPillLabel").textContent = `Seat${sorted.length > 1 ? "s" : ""} ${labels}`;
+  updateDietUI();
   renderCategoryTabs();
   renderMenu();
   show("app");
@@ -218,7 +237,7 @@ if ($("callWaiterBtn")) {
 
 // ===================== MENU =====================
 function categories() {
-  const set = new Set(menuCache.map(i => i.category || "Menu"));
+  const set = new Set(visibleMenu().map(i => i.category || "Menu"));
   return [...set];
 }
 let activeCat = null;
@@ -234,6 +253,46 @@ function renderCategoryTabs() {
     };
   });
 }
+// ---- Veg / non-veg filter popup ----
+function updateDietUI() {
+  const btn = $("dietFilterBtn"); if (!btn) return;
+  btn.dataset.diet = dietFilter;
+  btn.classList.toggle("active", dietFilter !== "all");
+  $("dietFilterLabel").textContent = dietFilter === "veg" ? "Veg" : dietFilter === "nonveg" ? "Non-veg" : "Filter";
+  const nv = menuCache.filter(isNonVeg).length;
+  $("dietCount-all").textContent = menuCache.length;
+  $("dietCount-nonveg").textContent = nv;
+  $("dietCount-veg").textContent = menuCache.length - nv;
+  document.querySelectorAll(".ord-diet-opt").forEach(o => {
+    const on = o.dataset.diet === dietFilter;
+    o.classList.toggle("on", on);
+    o.setAttribute("aria-checked", on ? "true" : "false");
+  });
+}
+function openDietSheet() {
+  updateDietUI();
+  $("dietOverlay").classList.remove("hidden");
+  $("dietSheet").classList.remove("hidden");
+}
+function closeDietSheet() {
+  $("dietOverlay").classList.add("hidden");
+  $("dietSheet").classList.add("hidden");
+}
+function setDietFilter(d) {
+  dietFilter = d;
+  try { sessionStorage.setItem(DIET_KEY, d); } catch (e) {}
+  updateDietUI();
+  renderCategoryTabs();
+  renderMenu();
+  closeDietSheet();
+  window.scrollTo({ top: 0 });
+}
+$("dietFilterBtn").onclick = openDietSheet;
+$("closeDietBtn").onclick = closeDietSheet;
+$("dietOverlay").onclick = closeDietSheet;
+document.querySelectorAll(".ord-diet-opt").forEach(o => { o.onclick = () => setDietFilter(o.dataset.diet); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDietSheet(); });
+
 function cssEscape(s) { return s.replace(/[^a-zA-Z0-9]/g, "_"); }
 
 function cartQtyForItem(itemId) {
@@ -245,9 +304,9 @@ function renderMenu() {
   $("menuList").innerHTML = cats.map(cat => `
     <div id="cat-${cssEscape(cat)}">
       <div class="ord-cat-heading">${escapeHtml(cat)}</div>
-      ${menuCache.filter(i => (i.category || "Menu") === cat).map(itemCardHtml).join("")}
+      ${visibleMenu().filter(i => (i.category || "Menu") === cat).map(itemCardHtml).join("")}
     </div>
-  `).join("") || `<div class="ord-empty-note">Menu isn't available right now.</div>`;
+  `).join("") || `<div class="ord-empty-note">${dietFilter === "all" ? "Menu isn't available right now." : `No ${dietFilter === "veg" ? "veg" : "non-veg"} items available right now.`}</div>`;
 
   document.querySelectorAll(".ord-item-card").forEach(card => {
     card.onclick = () => {
@@ -276,7 +335,7 @@ function itemCardHtml(i) {
   return `
   <div class="ord-item-card" data-id="${i.id}">
     <div class="ord-item-main">
-      <div class="ord-item-name"><span class="ord-veg-dot ${i.veg === false ? "nonveg" : ""}"></span>${escapeHtml(i.name)}</div>
+      <div class="ord-item-name">${vegDotHtml(i)}${escapeHtml(i.name)}</div>
       <div class="ord-item-price">${priceLabel}</div>
     </div>
     ${inCartQty
@@ -330,7 +389,7 @@ function maybeShowUpsell(triggerItem) {
   if (!triggerItem.upsellIds?.length || upsellShownFor.has(triggerItem.id)) return;
   const suggestions = triggerItem.upsellIds
     .map(id => menuCache.find(m => m.id === id))
-    .filter(m => m && cartQtyForItem(m.id) === 0);
+    .filter(m => m && cartQtyForItem(m.id) === 0 && dietMatches(m));
   if (!suggestions.length) return;
   upsellShownFor.add(triggerItem.id);
   showUpsellPrompt(suggestions);
@@ -339,7 +398,7 @@ function showUpsellPrompt(items) {
   $("upsellItems").innerHTML = items.map(i => `
     <div class="ord-upsell-item" data-id="${i.id}">
       <div class="ord-upsell-item-main">
-        <span class="ord-veg-dot ${i.veg === false ? "nonveg" : ""}"></span>
+        ${vegDotHtml(i)}
         <div>
           <div class="ord-upsell-item-name">${escapeHtml(i.name)}</div>
           <div class="ord-upsell-item-price">${i.variants?.length ? "From " + money(Math.min(...i.variants.map(v => v.price))) : money(i.basePrice || 0)}</div>

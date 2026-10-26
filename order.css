@@ -1,7 +1,7 @@
 :root{
   --ink:#161A23; --ink-soft:#343B4A; --paper:#F8F2E4; --surface:#FFFFFF; --surface-2:#FBF7EC;
   --primary:#1B5E4A; --primary-deep:#0F3D30; --primary-tint:#E2EFE8; --primary-grad:linear-gradient(135deg,#2A7A5F 0%,#16493A 55%,#0D2E25 100%);
-  --teal:#0E7C7B; --teal-tint:#E4F4F3; --green:#1C8A4B; --green-tint:#E5F6EC;
+  --red:#C4293D; --red-tint:#FBE7EA; --teal:#0E7C7B; --teal-tint:#E4F4F3; --green:#1C8A4B; --green-tint:#E5F6EC;
   --line:#E6DFCF; --muted:#6B7280; --radius:12px; --radius-sm:8px;
   --font-display:'Sora',sans-serif; --font-body:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
 }
@@ -35,8 +35,8 @@ h1,h2{font-family:var(--font-display);margin:0;}
 .ord-item-main{flex:1;min-width:0;}
 .ord-veg-dot{width:13px;height:13px;border:1.5px solid var(--green);border-radius:3px;display:inline-flex;align-items:center;justify-content:center;margin-right:6px;vertical-align:middle;}
 .ord-veg-dot::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);}
-.ord-veg-dot.nonveg{border-color:var(--primary);}
-.ord-veg-dot.nonveg::after{background:var(--primary-grad);}
+.ord-veg-dot.nonveg{border-color:var(--red);}
+.ord-veg-dot.nonveg::after{background:var(--red);}
 .ord-item-name{font-weight:700;font-size:14.5px;}
 .ord-item-price{color:var(--muted);font-size:13px;margin-top:3px;}
 .ord-item-add-btn{flex-shrink:0;background:var(--surface);border:1.5px solid var(--primary);color:var(--primary);font-weight:800;border-radius:var(--radius-sm);padding:8px 16px;font-size:13px;}
@@ -213,3 +213,34 @@ h1,h2{font-family:var(--font-display);margin:0;}
 .ord-trk-actions{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:26px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--paper) 62%,rgba(248,242,228,0));}
 .ord-trk-actions .ord-place-btn{max-width:520px;margin:0 auto;display:block;}
 @media (min-width:600px){.ord-track{max-width:560px;margin:0 auto;}.ord-trk-actions{left:50%;right:auto;width:560px;transform:translateX(-50%);}}
+
+/* ---------- Veg / non-veg filter ---------- */
+.ord-cat-row{display:flex;align-items:flex-start;padding-left:18px;}
+.ord-cat-row .ord-cat-tabs{flex:1;min-width:0;padding-left:8px;}
+.ord-diet-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;height:33px;padding:0 12px;margin-bottom:12px;border-radius:20px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.1);color:#fff;font-family:var(--font-body);font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;}
+.ord-diet-btn:active{transform:scale(.96);}
+.ord-diet-btn.active{background:#F6EFE4;color:var(--ink);border-color:#F6EFE4;}
+.ord-diet-ico{display:inline-flex;gap:3px;}
+.ord-diet-ico i,.ord-diet-mark.both i{width:8px;height:8px;border-radius:50%;display:block;}
+.ord-diet-ico i.g,.ord-diet-mark.both i.g{background:#2FB36B;}
+.ord-diet-ico i.r,.ord-diet-mark.both i.r{background:var(--red);}
+.ord-diet-btn[data-diet="veg"] .ord-diet-ico i.r,.ord-diet-btn[data-diet="nonveg"] .ord-diet-ico i.g{display:none;}
+.ord-diet-sheet{z-index:21;}
+#dietOverlay{z-index:20;}
+.ord-diet-opts{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
+.ord-diet-opt{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;font-family:var(--font-body);cursor:pointer;color:var(--ink);}
+.ord-diet-opt:active{transform:scale(.99);}
+.ord-diet-opt.on{border-color:var(--ink);background:var(--surface-2);}
+.ord-diet-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.ord-diet-txt b{font-size:15px;font-weight:700;}
+.ord-diet-txt small{font-size:12.5px;color:var(--muted);}
+.ord-diet-opt em{font-style:normal;font-size:12.5px;font-weight:700;color:var(--muted);background:var(--surface-2);border-radius:20px;padding:3px 9px;}
+.ord-diet-check{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex-shrink:0;position:relative;}
+.ord-diet-opt.on .ord-diet-check{border-color:var(--ink);}
+.ord-diet-opt.on .ord-diet-check::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink);}
+.ord-diet-mark{width:22px;height:22px;border-radius:5px;border:2px solid var(--green);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;gap:3px;}
+.ord-diet-mark.veg i{width:10px;height:10px;border-radius:50%;background:var(--green);}
+.ord-diet-mark.nonveg{border-color:var(--red);}
+.ord-diet-mark.nonveg i{width:10px;height:10px;border-radius:50%;background:var(--red);}
+.ord-diet-mark.both{border:2px solid var(--line);}
+@media (max-width:360px){.ord-cat-row{padding-left:14px;}.ord-diet-btn{padding:0 10px;}}

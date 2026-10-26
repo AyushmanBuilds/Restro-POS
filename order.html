@@ -48,7 +48,13 @@
         <div class="ord-table-pill">Table <span id="tableNameLabel">—</span> · <span id="seatPillLabel">Seat —</span></div>
       </div>
     </div>
-    <div class="ord-cat-tabs" id="catTabs"></div>
+    <div class="ord-cat-row">
+      <button id="dietFilterBtn" class="ord-diet-btn" type="button" aria-haspopup="dialog" aria-label="Filter by veg or non-veg" data-diet="all">
+        <span class="ord-diet-ico" aria-hidden="true"><i class="g"></i><i class="r"></i></span>
+        <span id="dietFilterLabel">Filter</span>
+      </button>
+      <div class="ord-cat-tabs" id="catTabs"></div>
+    </div>
   </header>
 
   <main class="ord-menu" id="menuList"></main>
@@ -125,6 +131,32 @@
     </div>
   </div>
   <button id="sheetAddBtn" class="ord-place-btn">Add to order — ₹0</button>
+</div>
+
+<!-- Veg / non-veg filter popup -->
+<div id="dietOverlay" class="ord-overlay hidden"></div>
+<div id="dietSheet" class="ord-item-sheet ord-diet-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="dietSheetTitle">
+  <div class="ord-sheet-head">
+    <h2 id="dietSheetTitle">Show me</h2>
+    <button id="closeDietBtn" class="ord-x" type="button" aria-label="Close">×</button>
+  </div>
+  <div class="ord-diet-opts" role="radiogroup" aria-label="Food type">
+    <button type="button" class="ord-diet-opt" data-diet="all" role="radio" aria-checked="true">
+      <span class="ord-diet-mark both"><i class="g"></i><i class="r"></i></span>
+      <span class="ord-diet-txt"><b>All items</b><small>Veg and non-veg</small></span>
+      <em id="dietCount-all">0</em><span class="ord-diet-check"></span>
+    </button>
+    <button type="button" class="ord-diet-opt" data-diet="veg" role="radio" aria-checked="false">
+      <span class="ord-diet-mark veg"><i></i></span>
+      <span class="ord-diet-txt"><b>Veg only</b><small>Vegetarian dishes</small></span>
+      <em id="dietCount-veg">0</em><span class="ord-diet-check"></span>
+    </button>
+    <button type="button" class="ord-diet-opt" data-diet="nonveg" role="radio" aria-checked="false">
+      <span class="ord-diet-mark nonveg"><i></i></span>
+      <span class="ord-diet-txt"><b>Non-veg only</b><small>Chicken, egg, meat &amp; seafood</small></span>
+      <em id="dietCount-nonveg">0</em><span class="ord-diet-check"></span>
+    </button>
+  </div>
 </div>
 
 <script type="module" src="order.js"></script>
