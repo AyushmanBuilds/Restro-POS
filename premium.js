@@ -8,7 +8,7 @@
 
     /* live clock in the top bar */
     var clock=document.createElement('div');clock.className='bar-clock';
-    bar.insertBefore(clock,document.getElementById('logoutBtn'));
+    bar.insertBefore(clock,document.getElementById('fsToggleBtn')||document.getElementById('logoutBtn'));
     function tick(){var d=new Date();
       clock.innerHTML='<b>'+d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'})+'</b><span>'+
         d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})+'</span>';}
