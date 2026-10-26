@@ -1557,7 +1557,7 @@ async function syncCustomerOrderStatus(orderId, patch) {
   try {
     const snap = await getDocs(query(collection(db, "restaurants", restoId, "customerOrders"), where("orderId", "==", orderId)));
     await Promise.all(snap.docs.map(d => updateDoc(d.ref, { ...patch, statusUpdatedAt: serverTimestamp() })));
-  } catch (e) { console.warn("Customer status sync failed", e); }
+  } catch (e) { console.warn("Customer status sync failed", e); toast("⚠️ Customer live status not updated: " + (e.code || e.message)); }
 }
 async function approveCustomerOrder(co) {
   if (!co) return;

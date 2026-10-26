@@ -551,6 +551,7 @@ const trackUnsubs = {};   // customerOrders doc id -> unsubscribe fn
 const trackData = {};     // customerOrders doc id -> latest data
 const trackPrevStage = {};
 let trackFailed = false;
+let trackErrCode = "";
 
 const TRACK_STEPS = [
   { label: "Order received", sub: "Your order is with our team" },
@@ -603,6 +604,7 @@ function subscribeTracked(id) {
   }, (err) => {
     console.warn("Order tracking unavailable", err);
     trackFailed = true;
+    trackErrCode = (err && (err.code || err.message)) || "unknown";
     renderTracker();
   });
 }
@@ -627,7 +629,7 @@ function renderTracker() {
   const list = $("trackList");
   const order = loadTracked().map(x => x.id).filter(id => trackData[id]);
   $("trackNotice").classList.toggle("hidden", !(trackFailed && !order.length));
-  $("trackNotice").textContent = "Live status isn't available right now, but your order has been sent. Please ask a staff member for an update.";
+  $("trackNotice").textContent = "Live status isn't available right now, but your order has been sent. Please ask a staff member for an update." + (trackErrCode ? " [" + trackErrCode + "]" : "");
   refreshTrackBtn();
 
   if (!order.length) {
