@@ -1,0 +1,79 @@
+/* ===== Hero banner + tablet/desktop layout for the customer ordering page =====
+   Load AFTER order.css and premium.css. Mobile-first. */
+
+/* ---------- Hero ---------- */
+.ord-hero{position:relative;overflow:hidden;background:#0D1E19;height:clamp(180px,50vw,240px);isolation:isolate;}
+.ord-hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:72% 60%;display:block;z-index:-2;}
+/* left scrim keeps text readable; bottom fade melts into the dark header */
+.ord-hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:
+    linear-gradient(to top,#0D1E19 0%,rgba(13,30,25,0) 38%),
+    linear-gradient(90deg,rgba(8,18,14,.82) 0%,rgba(8,18,14,.5) 45%,rgba(8,18,14,0) 80%);}
+.ord-hero-copy{position:absolute;left:18px;right:18px;bottom:26px;max-width:62%;color:#fff;}
+.ord-hero-title{margin:0 0 6px;font-family:var(--font-display);font-weight:600;font-size:clamp(22px,6.4vw,28px);line-height:1.12;letter-spacing:-.015em;text-wrap:balance;}
+.ord-hero-sub{margin:0;font-size:13px;line-height:1.45;color:rgba(255,255,255,.8);max-width:26ch;}
+
+/* the header stays sticky below the hero; no seam between the two */
+.ord-hero + .ord-header{box-shadow:0 12px 30px rgba(8,18,14,.18);}
+
+/* very small phones */
+@media (max-width:359px){
+  .ord-hero{height:168px;}
+  .ord-hero-copy{left:14px;bottom:20px;max-width:70%;}
+  .ord-hero-sub{display:none;}
+}
+/* short landscape phones: keep the menu visible */
+@media (max-height:480px) and (orientation:landscape){
+  .ord-hero{height:130px;}
+  .ord-hero-sub{display:none;}
+  .ord-hero-copy{bottom:16px;}
+}
+
+/* ---------- Tablet (portrait iPad / Android tablets) ---------- */
+@media (min-width:720px){
+  .ord-hero{height:clamp(280px,32vw,340px);}
+  .ord-hero-img{object-position:center 62%;}
+  .ord-hero-copy{left:max(36px,calc((100% - 1100px)/2 + 36px));bottom:40px;max-width:46%;}
+  .ord-hero-title{font-size:clamp(32px,4.4vw,42px);margin-bottom:10px;}
+  .ord-hero-sub{font-size:16px;max-width:30ch;}
+  .ord-hero::after{background:
+    linear-gradient(to top,#0D1E19 0%,rgba(13,30,25,0) 32%),
+    linear-gradient(90deg,rgba(8,18,14,.78) 0%,rgba(8,18,14,.4) 42%,rgba(8,18,14,0) 70%);}
+
+  /* header content lines up with the centred menu column */
+  .ord-header-top{padding:18px max(28px,calc((100% - 1100px)/2 + 28px)) 12px;}
+  .ord-resto-name{font-size:24px;}
+  .ord-table-pill{font-size:14px;padding:7px 15px;}
+  .ord-cat-row{padding-left:max(28px,calc((100% - 1100px)/2 + 28px));}
+  .ord-cat-row .ord-cat-tabs{padding-right:max(28px,calc((100% - 1100px)/2 + 28px));}
+  .ord-cat-tab{font-size:14px;padding:8px 18px;}
+  .ord-diet-btn{height:36px;font-size:14px;}
+
+  /* menu: two columns, category headings span the row */
+  .ord-menu{max-width:1100px;margin:0 auto;padding:22px 28px;}
+  .ord-menu > div[id^="cat-"]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:10px;}
+  .ord-menu .ord-cat-heading{grid-column:1/-1;margin:14px 4px 0;font-size:22px;}
+  .ord-menu .ord-item-card{margin-bottom:0;padding:16px 18px;}
+  .ord-item-name{font-size:16px;}
+  .ord-item-price{font-size:14px;}
+  .ord-item-add-btn{padding:9px 20px;font-size:14px;}
+
+  /* floating bars + sheets: centred, never stretched edge to edge */
+  .ord-cart-fab{left:0;right:0;margin-inline:auto;width:min(560px,calc(100% - 32px));}
+  .ord-waiter-fab{right:max(24px,calc((100% - 1100px)/2 + 24px));}
+  .ord-cart-drawer,.ord-item-sheet{left:0;right:0;margin-inline:auto;max-width:560px;}
+  .ord-upsell{right:max(24px,calc((100% - 1100px)/2 + 24px));}
+}
+
+/* ---------- Large tablet landscape / small desktop ---------- */
+@media (min-width:1024px){
+  .ord-hero{height:380px;}
+  .ord-hero-title{font-size:48px;}
+  .ord-menu > div[id^="cat-"]{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+
+/* ---------- Respect motion + safe areas ---------- */
+@media (prefers-reduced-motion:reduce){.ord-hero-img{animation:none;}}
+@supports (padding:max(0px)){
+  .ord-cart-fab{bottom:max(18px,env(safe-area-inset-bottom));}
+}
