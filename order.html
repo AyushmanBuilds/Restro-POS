@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="order.css">
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="order-hero.css">
+<link rel="stylesheet" href="order-nav.css">
 </head>
 <body>
 
@@ -56,12 +57,24 @@
         <div class="ord-table-pill">Table <span id="tableNameLabel">—</span> · <span id="seatPillLabel">Seat —</span></div>
       </div>
     </div>
-    <div class="ord-cat-row">
-      <button id="dietFilterBtn" class="ord-diet-btn" type="button" aria-haspopup="dialog" aria-label="Filter by veg or non-veg" data-diet="all">
-        <span class="ord-diet-ico" aria-hidden="true"><i class="g"></i><i class="r"></i></span>
-        <span id="dietFilterLabel">Filter</span>
+    <div class="ord-tools">
+      <label class="ord-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+        <input id="menuSearchInput" type="search" placeholder="Search dishes and drinks" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search the menu">
+        <button id="searchClearBtn" class="ord-search-x hidden" type="button" aria-label="Clear search">×</button>
+      </label>
+      <button id="catPickBtn" class="ord-catpick" type="button" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>
+        Categories
       </button>
-      <div class="ord-cat-tabs" id="catTabs"></div>
+      <div class="ord-diet-toggles" role="group" aria-label="Food type">
+        <button id="vegToggle" class="ord-sw" data-kind="veg" type="button" role="switch" aria-checked="false">
+          <span class="ord-sw-mark"><i></i></span><span class="ord-sw-lbl">Veg</span><span class="ord-sw-track"><i></i></span>
+        </button>
+        <button id="nonvegToggle" class="ord-sw" data-kind="nonveg" type="button" role="switch" aria-checked="false">
+          <span class="ord-sw-mark"><i></i></span><span class="ord-sw-lbl">Non-veg</span><span class="ord-sw-track"><i></i></span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -141,30 +154,14 @@
   <button id="sheetAddBtn" class="ord-place-btn">Add to order — ₹0</button>
 </div>
 
-<!-- Veg / non-veg filter popup -->
-<div id="dietOverlay" class="ord-overlay hidden"></div>
-<div id="dietSheet" class="ord-item-sheet ord-diet-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="dietSheetTitle">
+<!-- Category picker -->
+<div id="catOverlay" class="ord-overlay hidden"></div>
+<div id="catSheet" class="ord-item-sheet ord-cat-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="catSheetTitle">
   <div class="ord-sheet-head">
-    <h2 id="dietSheetTitle">Show me</h2>
-    <button id="closeDietBtn" class="ord-x" type="button" aria-label="Close">×</button>
+    <h2 id="catSheetTitle">Browse the menu</h2>
+    <button id="closeCatBtn" class="ord-x" type="button" aria-label="Close">×</button>
   </div>
-  <div class="ord-diet-opts" role="radiogroup" aria-label="Food type">
-    <button type="button" class="ord-diet-opt" data-diet="all" role="radio" aria-checked="true">
-      <span class="ord-diet-mark both"><i class="g"></i><i class="r"></i></span>
-      <span class="ord-diet-txt"><b>All items</b><small>Veg and non-veg</small></span>
-      <em id="dietCount-all">0</em><span class="ord-diet-check"></span>
-    </button>
-    <button type="button" class="ord-diet-opt" data-diet="veg" role="radio" aria-checked="false">
-      <span class="ord-diet-mark veg"><i></i></span>
-      <span class="ord-diet-txt"><b>Veg only</b><small>Vegetarian dishes</small></span>
-      <em id="dietCount-veg">0</em><span class="ord-diet-check"></span>
-    </button>
-    <button type="button" class="ord-diet-opt" data-diet="nonveg" role="radio" aria-checked="false">
-      <span class="ord-diet-mark nonveg"><i></i></span>
-      <span class="ord-diet-txt"><b>Non-veg only</b><small>Chicken, egg, meat &amp; seafood</small></span>
-      <em id="dietCount-nonveg">0</em><span class="ord-diet-check"></span>
-    </button>
-  </div>
+  <div id="catGrid" class="ord-cat-grid"></div>
 </div>
 
 <script type="module" src="order.js"></script>

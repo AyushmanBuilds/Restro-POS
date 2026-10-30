@@ -51,7 +51,7 @@ function isNonVeg(i) {
   return typeof v === "string" && /^non[\s_-]?veg/i.test(v.trim());
 }
 function dietMatches(i) { return dietFilter === "all" || (dietFilter === "nonveg") === isNonVeg(i); }
-function visibleMenu() { return menuCache.filter(dietMatches); }
+function visibleMenu() { return menuCache.filter(dietMatches).filter(searchMatches); }
 function vegDotHtml(i) {
   const nv = isNonVeg(i);
   return `<span class="ord-veg-dot ${nv ? "nonveg" : ""}" role="img" aria-label="${nv ? "Non-veg" : "Veg"}"></span>`;
@@ -241,57 +241,111 @@ function categories() {
   return [...set];
 }
 let activeCat = null;
-function renderCategoryTabs() {
+
+// ---- Search ----
+let searchQuery = "";
+function norm(s) { return String(s || "").toLowerCase().trim(); }
+function searchMatches(i) {
+  if (!searchQuery) return true;
+  return norm(i.name).includes(searchQuery) || norm(i.category).includes(searchQuery) || norm(i.description).includes(searchQuery);
+}
+function headerHeight() { const h = document.querySelector(".ord-header"); return h ? h.offsetHeight : 0; }
+// After the list changes (search / filter), bring the results into view under the sticky header.
+function scrollToMenuTop() {
+  const top = $("menuList").getBoundingClientRect().top + window.scrollY - headerHeight() - 4;
+  if (window.scrollY > top) window.scrollTo({ top: Math.max(0, top) });
+}
+function refreshMenuView() {
+  activeCat = null;
+  renderCategoryTabs();
+  renderMenu();
+  scrollToMenuTop();
+}
+let searchTimer;
+function applySearch(v) { searchQuery = norm(v); refreshMenuView(); }
+{
+  const si = $("menuSearchInput"), sc = $("searchClearBtn");
+  si.addEventListener("input", () => {
+    sc.classList.toggle("hidden", !si.value);
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applySearch(si.value), 120);
+  });
+  si.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); si.blur(); } });
+  sc.onclick = () => { si.value = ""; sc.classList.add("hidden"); applySearch(""); si.focus(); };
+}
+
+// ---- Category picker (replaces the sideways-scrolling tabs) ----
+function renderCategoryTabs() {            // name kept so existing callers still work
   const cats = categories();
-  activeCat = cats[0] || null;
-  $("catTabs").innerHTML = cats.map(c => `<button class="ord-cat-tab ${c === activeCat ? "active" : ""}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("");
-  $("catTabs").querySelectorAll(".ord-cat-tab").forEach(b => {
-    b.onclick = () => {
-      activeCat = b.dataset.cat;
-      $("catTabs").querySelectorAll(".ord-cat-tab").forEach(x => x.classList.toggle("active", x === b));
-      document.getElementById(`cat-${cssEscape(activeCat)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-  });
+  if (!cats.includes(activeCat)) activeCat = cats[0] || null;
+  $("catPickBtn").disabled = !cats.length;
+  buildCatSheet(cats);
 }
-// ---- Veg / non-veg filter popup ----
+function buildCatSheet(cats) {
+  const vis = visibleMenu();
+  $("catGrid").innerHTML = cats.map(c => {
+    const n = vis.filter(i => (i.category || "Menu") === c).length;
+    return `<button type="button" class="ord-cat-tile${c === activeCat ? " on" : ""}" data-cat="${escapeHtml(c)}"><b>${escapeHtml(c)}</b><small>${n} item${n === 1 ? "" : "s"}</small></button>`;
+  }).join("");
+  $("catGrid").querySelectorAll(".ord-cat-tile").forEach(b => { b.onclick = () => jumpToCategory(b.dataset.cat); });
+}
+function openCatSheet() {
+  buildCatSheet(categories());
+  $("catOverlay").classList.remove("hidden");
+  $("catSheet").classList.remove("hidden");
+}
+function closeCatSheet() {
+  $("catOverlay").classList.add("hidden");
+  $("catSheet").classList.add("hidden");
+}
+let spyHold = 0;
+function jumpToCategory(c) {
+  activeCat = c;
+  closeCatSheet();
+  const el = document.getElementById(`cat-${cssEscape(c)}`);
+  if (!el) return;
+  spyHold = Date.now() + 900;               // don't let scroll-spy fight the smooth scroll
+  const y = el.getBoundingClientRect().top + window.scrollY - headerHeight() - 8;
+  window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+}
+// scroll-spy: keep the highlighted category in the picker in sync with what's on screen
+let spyQueued = false;
+function spy() {
+  spyQueued = false;
+  if (Date.now() < spyHold) return;
+  const cats = categories(); if (!cats.length) return;
+  const line = headerHeight() + 24;
+  let cur = cats[0];
+  for (const c of cats) {
+    const el = document.getElementById(`cat-${cssEscape(c)}`);
+    if (el && el.getBoundingClientRect().top <= line) cur = c;
+  }
+  if (window.scrollY > 50 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = cats[cats.length - 1];
+  activeCat = cur;
+}
+window.addEventListener("scroll", () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spy); } }, { passive: true });
+$("catPickBtn").onclick = openCatSheet;
+$("closeCatBtn").onclick = closeCatSheet;
+$("catOverlay").onclick = closeCatSheet;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeCatSheet(); });
+
+// ---- Veg / Non-veg switches (tap again to turn off = show all) ----
 function updateDietUI() {
-  const btn = $("dietFilterBtn"); if (!btn) return;
-  btn.dataset.diet = dietFilter;
-  btn.classList.toggle("active", dietFilter !== "all");
-  $("dietFilterLabel").textContent = dietFilter === "veg" ? "Veg" : dietFilter === "nonveg" ? "Non-veg" : "Filter";
-  const nv = menuCache.filter(isNonVeg).length;
-  $("dietCount-all").textContent = menuCache.length;
-  $("dietCount-nonveg").textContent = nv;
-  $("dietCount-veg").textContent = menuCache.length - nv;
-  document.querySelectorAll(".ord-diet-opt").forEach(o => {
-    const on = o.dataset.diet === dietFilter;
-    o.classList.toggle("on", on);
-    o.setAttribute("aria-checked", on ? "true" : "false");
+  [["vegToggle", "veg"], ["nonvegToggle", "nonveg"]].forEach(([id, kind]) => {
+    const b = $(id); if (!b) return;
+    const on = dietFilter === kind;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on ? "true" : "false");
   });
-}
-function openDietSheet() {
-  updateDietUI();
-  $("dietOverlay").classList.remove("hidden");
-  $("dietSheet").classList.remove("hidden");
-}
-function closeDietSheet() {
-  $("dietOverlay").classList.add("hidden");
-  $("dietSheet").classList.add("hidden");
 }
 function setDietFilter(d) {
   dietFilter = d;
   try { sessionStorage.setItem(DIET_KEY, d); } catch (e) {}
   updateDietUI();
-  renderCategoryTabs();
-  renderMenu();
-  closeDietSheet();
-  window.scrollTo({ top: 0 });
+  refreshMenuView();
 }
-$("dietFilterBtn").onclick = openDietSheet;
-$("closeDietBtn").onclick = closeDietSheet;
-$("dietOverlay").onclick = closeDietSheet;
-document.querySelectorAll(".ord-diet-opt").forEach(o => { o.onclick = () => setDietFilter(o.dataset.diet); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeDietSheet(); });
+$("vegToggle").onclick = () => setDietFilter(dietFilter === "veg" ? "all" : "veg");
+$("nonvegToggle").onclick = () => setDietFilter(dietFilter === "nonveg" ? "all" : "nonveg");
 
 function cssEscape(s) { return s.replace(/[^a-zA-Z0-9]/g, "_"); }
 
@@ -306,7 +360,7 @@ function renderMenu() {
       <div class="ord-cat-heading">${escapeHtml(cat)}</div>
       ${visibleMenu().filter(i => (i.category || "Menu") === cat).map(itemCardHtml).join("")}
     </div>
-  `).join("") || `<div class="ord-empty-note">${dietFilter === "all" ? "Menu isn't available right now." : `No ${dietFilter === "veg" ? "veg" : "non-veg"} items available right now.`}</div>`;
+  `).join("") || `<div class="ord-empty-note">${searchQuery ? `No dishes found for “${escapeHtml($("menuSearchInput").value.trim())}”${dietFilter === "all" ? "" : ` in ${dietFilter === "veg" ? "veg" : "non-veg"}`}. Try another name.` : dietFilter === "all" ? "Menu isn't available right now." : `No ${dietFilter === "veg" ? "veg" : "non-veg"} items available right now.`}</div>`;
 
   document.querySelectorAll(".ord-item-card").forEach(card => {
     card.onclick = () => {
