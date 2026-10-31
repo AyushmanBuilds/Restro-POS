@@ -1159,26 +1159,6 @@ input,textarea,select,button{font-family:inherit;font-size:14px;}
 .upr-price{color:var(--muted);font-size:12px;}
 .upsell-empty{font-size:12.5px;color:var(--muted);padding:8px 2px;}
 
-/* ===================== PAYROLL & TIP POOL ===================== */
-.payroll-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:22px;}
-.payroll-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px;}
-.payroll-head h2{margin:2px 0 4px;font-size:17px;}
-.payroll-head p{color:var(--muted);font-size:12.5px;max-width:440px;line-height:1.5;margin:0;}
-.payroll-head input[type="month"]{border:1.5px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;}
-.payroll-tip-input{display:block;font-weight:700;font-size:13px;margin-bottom:4px;}
-.payroll-tip-input input{width:220px;margin-top:6px;border:1.5px solid var(--line);border-radius:8px;padding:9px 12px;font-size:14px;font-family:inherit;}
-.payroll-tip-hint{color:var(--muted);font-size:11.5px;margin:0 0 14px;}
-.payroll-table-wrap{overflow-x:auto;}
-.payroll-table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px;}
-.payroll-table th{text-align:left;color:var(--muted);font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;padding:8px 10px;border-bottom:2px solid var(--line);}
-.payroll-table td{padding:10px;border-bottom:1px solid var(--line);}
-.payroll-table tfoot td{font-weight:800;border-top:2px solid var(--ink);border-bottom:none;}
-.payroll-payable{font-weight:800;color:var(--primary-deep);}
-@media (max-width:640px){
-  .payroll-head{flex-direction:column;}
-  .payroll-tip-input input{width:100%;}
-}
-
 /* ===================== DARK KITCHEN / CLOUD KITCHEN MODE ===================== */
 .kds-order-type-badge{font-size:11px;font-weight:700;color:var(--teal);background:var(--teal-tint);display:inline-block;padding:3px 9px;border-radius:20px;margin:4px 0 6px;}
 .kds-pack-btn{background:var(--amber) !important;color:#3a2a00 !important;}

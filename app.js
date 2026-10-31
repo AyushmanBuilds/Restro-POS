@@ -55,6 +55,7 @@ let kdsInitialLoadDone = false;   // suppress chime on first snapshot load
 let customerOrdersInitialLoadDone = false; // suppress chime on first snapshot load
 let waiterCallsInitialLoadDone = false;    // suppress chime on first snapshot load
 let kdsSoundOn = localStorage.getItem("kdsSoundOn") !== "off";
+let alertLastRing = 0; // declared early: playNotifSound() reads it before the alert engine section runs
 
 // ---- Notification sound settings (per event type) ----
 // Each event (kds = new kitchen ticket, qrorder = new QR order from a
@@ -112,7 +113,9 @@ let seatPickerSelected = []; // seat letters currently tapped/selected in the se
 let staffCache = [];          // staff member docs
 let todayAttendanceCache = []; // attendance docs for today only, across all staff (drives live status on cards)
 let unsubStaff = null, unsubTodayAttendance = null;
-let staffUnlocked = false;    // session-only unlock flag — resets on logout / page reload
+let staffUnlocked = false;    // unlocked once per browser session; only "Lock now" / sign-out / closing the tab re-locks it
+let staffRangeAttCache = [];  // attendance docs for this month + last 7 days, drives the staff cards
+let unsubRangeAttendance = null;
 let editingStaffId = null;    // staff member being edited in staff modal
 let calendarStaffId = null;   // staff member whose attendance calendar is open
 let calendarMonthDate = new Date(); // first-of-month date currently shown in the attendance calendar
@@ -138,6 +141,7 @@ const STAFF_TRANSLATIONS = {
     "No incoming customer orders right now.": "अभी कोई नया ऑर्डर नहीं है।",
     "Table": "टेबल", "Seat": "सीट", "Kitchen Display": "किचन डिस्प्ले",
     "item": "आइटम", "items": "आइटम्स", "Guest": "ग्राहक",
+    "Approve": "स्वीकार करें", "Reject": "अस्वीकार करें", "Resolved": "हो गया", "Waiter calls": "वेटर कॉल",
   }
 };
 function t(str) {
@@ -382,12 +386,6 @@ function showPrompt(msg, { title = "Enter a value", placeholder = "", defaultVal
 }
 
 function showView(name) {
-  // Auto-lock the staff area the instant the owner navigates away from it —
-  // no relying on them remembering to tap "Lock now". Re-opening it always
-  // asks for the password again.
-  const leavingStaff = $("view-staff")?.classList.contains("active") && name !== "staff";
-  if (leavingStaff && staffUnlocked) staffUnlocked = false;
-
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
   const view = $("view-" + name);
@@ -512,7 +510,8 @@ onAuthStateChanged(auth, async (user) => {
     if (unsubWaitlist) unsubWaitlist();
     if (unsubCustomerOrders) unsubCustomerOrders();
     if (unsubWaiterCalls) unsubWaiterCalls();
-    staffUnlocked = false; // re-lock the staff area on sign-out, always
+    setStaffUnlocked(false); // sign-out always re-locks the staff area
+    if (unsubRangeAttendance) unsubRangeAttendance();
     $("appShell").classList.add("hidden");
     $("authScreen").classList.remove("hidden");
   } else {
@@ -578,20 +577,28 @@ function attachListeners() {
     if ($("view-kds").classList.contains("active")) renderKds();
     if (hasNewArrival && kdsInitialLoadDone) { playNotifSound("kds"); notifyTab("kds"); }
     kdsInitialLoadDone = true;
+    refreshAlerts();
   });
 
   const staffRef = collection(db, "restaurants", restoId, "staff");
   unsubStaff = onSnapshot(staffRef, (snap) => {
     staffCache = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    if (staffUnlocked) renderStaffGrid();
+    if (isStaffUnlocked() && $("view-staff")?.classList.contains("active")) renderStaffGrid();
     renderDashboardStaffDuty();
   });
 
   const attRef = collection(db, "restaurants", restoId, "attendance");
   unsubTodayAttendance = onSnapshot(query(attRef, where("date", "==", todayStr())), (snap) => {
     todayAttendanceCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (staffUnlocked) renderStaffGrid();
+    if (isStaffUnlocked() && $("view-staff")?.classList.contains("active")) renderStaffGrid();
     renderDashboardStaffDuty();
+  });
+  // this month + the last 7 days (a single-field range query, so no extra index is needed)
+  const rangeStart = new Date(); rangeStart.setDate(rangeStart.getDate() - 7);
+  const monthFirst = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  unsubRangeAttendance = onSnapshot(query(attRef, where("date", ">=", dateStrOf(rangeStart < monthFirst ? rangeStart : monthFirst))), (snap) => {
+    staffRangeAttCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (isStaffUnlocked() && $("view-staff")?.classList.contains("active")) renderStaffGrid();
   });
 
   const expRef = collection(db, "restaurants", restoId, "expenses");
@@ -623,6 +630,7 @@ function attachListeners() {
     renderDashboardKdsQueue();
     if (hasNewArrival && customerOrdersInitialLoadDone) { playNotifSound("qrorder"); notifyTab("qrorder"); }
     customerOrdersInitialLoadDone = true;
+    refreshAlerts();
   });
 
   // "Call waiter" requests customers send from the QR ordering page.
@@ -635,6 +643,7 @@ function attachListeners() {
     if ($("view-qrorder").classList.contains("active")) renderQrOrderingView();
     if (hasNewArrival && waiterCallsInitialLoadDone) { playNotifSound("waiter"); notifyTab("qrorder"); }
     waiterCallsInitialLoadDone = true;
+    refreshAlerts();
   });
 }
 
@@ -1149,6 +1158,7 @@ function playRingtone(soundKey, volume = 0.55) {
 function playNotifSound(kind) {
   if (!kdsSoundOn) return;
   const key = notifSoundSettings[kind] || NOTIF_SOUND_DEFAULTS[kind] || "chime";
+  alertLastRing = Date.now();
   playRingtone(key, notifVolume());
 }
 function notifVolume() {
@@ -1179,7 +1189,8 @@ function populateNotificationSettingsUI() {
   if (!el) return;
   el.innerHTML = rows.map(r => `
     <div class="notif-sound-row" data-kind="${r.key}">
-      <div class="nsr-info"><div class="nsr-label">${r.label}</div><div class="nsr-hint">${r.hint}</div></div>
+      <div class="nsr-info"><div class="nsr-label">${r.label}</div><div class="nsr-hint">${r.hint}</div>
+        <label class="nsr-repeat"><input type="checkbox" data-repeat="${r.key}" ${alertRepeatOn(r.key) ? "checked" : ""}> Keep ringing on this device until handled</label></div>
       <div class="nsr-controls">
         <select class="nsr-select" data-kind="${r.key}">
           ${Object.entries(RINGTONES).map(([k, v]) => `<option value="${k}" ${notifSoundSettings[r.key] === k ? "selected" : ""}>${v.label}</option>`).join("")}
@@ -1193,6 +1204,9 @@ function populateNotificationSettingsUI() {
       saveNotifSoundSettings();
       playRingtone(sel.value, notifVolume());
     };
+  });
+  el.querySelectorAll("[data-repeat]").forEach(cb => {
+    cb.onchange = () => { localStorage.setItem("alertRepeat_" + cb.dataset.repeat, cb.checked ? "on" : "off"); refreshAlerts(); };
   });
   el.querySelectorAll(".nsr-preview").forEach(btn => {
     btn.onclick = () => playRingtone(notifSoundSettings[btn.dataset.kind] || "bell", notifVolume());
@@ -1217,11 +1231,103 @@ function syncSoundToggles() {
       kdsSoundOn = $(id).checked;
       localStorage.setItem("kdsSoundOn", kdsSoundOn ? "on" : "off");
       syncSoundToggles();
+      refreshAlerts();
     };
   }
 });
 syncSoundToggles();
 setInterval(() => { if ($("view-kds").classList.contains("active")) renderKds(); }, 30000);
+
+// ===================== KEEP-RINGING ALERTS =====================
+// A new waiter call, a QR order waiting for approval, or a new kitchen ticket
+// keeps this device ringing (and the red bar on screen) until it is HANDLED:
+//   waiter call  -> someone taps "Resolved"
+//   QR order     -> someone taps "Approve" or "Reject"
+//   kitchen KOT  -> the kitchen taps "Start preparing" on the Kitchen screen
+// The state is derived from the live data, so it stops by itself the moment
+// the last pending item is dealt with -- on every device at once.
+const ALERT_KINDS = [
+  { key: "waiter", one: "waiter call", many: "waiter calls", view: "qrorder" },
+  { key: "qrorder", one: "order to approve", many: "orders to approve", view: "qrorder" },
+  { key: "kds", one: "new kitchen ticket", many: "new kitchen tickets", view: "kds" },
+];
+const ALERT_REPEAT_MS = 3500;
+let alertTimer = null, alertMutedUntil = 0, alertTitleBase = null, alertTitleFlip = false;
+
+function alertRepeatOn(kind) { return localStorage.getItem("alertRepeat_" + kind) !== "off"; }
+function alertCounts() {
+  return {
+    waiter: waiterCallsCache.length,
+    qrorder: customerOrdersCache.length,
+    // a ticket is "new" until the kitchen taps Start preparing
+    kds: kdsOrders().filter(o => (o.kitchenStatus || "new") === "new").length,
+  };
+}
+function activeAlerts() {
+  const c = alertCounts();
+  return ALERT_KINDS.filter(k => c[k.key] > 0 && alertRepeatOn(k.key)).map(k => ({ ...k, n: c[k.key] }));
+}
+function ringAlerts() {
+  if (!kdsSoundOn || Date.now() < alertMutedUntil) return;
+  alertLastRing = Date.now();
+  // stagger the tones when several kinds are pending so they stay distinguishable
+  activeAlerts().forEach((k, i) => setTimeout(() => playRingtone(notifSoundSettings[k.key] || NOTIF_SOUND_DEFAULTS[k.key] || "bell", notifVolume()), i * 900));
+  try { if (navigator.vibrate) navigator.vibrate([280, 120, 280]); } catch (e) { /* unsupported */ }
+}
+function refreshAlerts() {
+  const bar = $("alertBar");
+  if (!bar) return;
+  const active = activeAlerts();
+  if (!active.length) {
+    bar.classList.add("hidden");
+    stopAlertLoop();
+    return;
+  }
+  const muted = Date.now() < alertMutedUntil;
+  bar.classList.remove("hidden");
+  bar.classList.toggle("muted", muted || !kdsSoundOn);
+  $("alertItems").innerHTML = active.map(k =>
+    `<button type="button" class="al-chip" data-go="${k.view}"><b>${k.n}</b>${k.n === 1 ? k.one : k.many}</button>`).join("");
+  const mb = $("alertMuteBtn");
+  if (!kdsSoundOn) mb.textContent = "Sound is off";
+  else if (muted) mb.textContent = `Muted · ${Math.max(1, Math.ceil((alertMutedUntil - Date.now()) / 1000))}s · Unmute`;
+  else mb.textContent = "Mute 1 min";
+  startAlertLoop();
+}
+function startAlertLoop() {
+  if (alertTimer) return;
+  if (alertTitleBase === null) alertTitleBase = document.title;
+  if (Date.now() - alertLastRing > 1500) ringAlerts(); // pending on load, or no one-shot just played
+  alertTimer = setInterval(() => {
+    const active = activeAlerts();
+    if (!active.length) { refreshAlerts(); return; }
+    ringAlerts();
+    refreshAlerts(); // keeps the mute countdown fresh
+    alertTitleFlip = !alertTitleFlip;
+    const total = active.reduce((s, k) => s + k.n, 0);
+    document.title = alertTitleFlip ? `🔔 (${total}) Needs attention` : alertTitleBase;
+  }, ALERT_REPEAT_MS);
+}
+function stopAlertLoop() {
+  if (alertTimer) { clearInterval(alertTimer); alertTimer = null; }
+  if (alertTitleBase !== null) { document.title = alertTitleBase; alertTitleBase = null; }
+}
+$("alertMuteBtn").onclick = () => {
+  if (!kdsSoundOn) { toast("Sound is switched off in Settings → Notification sounds"); return; }
+  alertMutedUntil = Date.now() < alertMutedUntil ? 0 : Date.now() + 60000;
+  if (!alertMutedUntil) ringAlerts();
+  refreshAlerts();
+};
+$("alertItems").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-go]");
+  if (b) showView(b.dataset.go);
+});
+// Browsers only let a page make sound after the person has tapped something once.
+// Warm the audio engine on the first touch/click/key so later alerts can ring.
+["pointerdown", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, () => {
+  if (!_notifCtx || _notifCtx.state !== "running") { try { _audioCtx(); } catch (e) { /* no audio */ } }
+}, { passive: true }));
+
 
 // ===================== EXPENSES & CASH REGISTER =====================
 let expPeriod = "day";
@@ -1474,82 +1580,248 @@ function customerOrderBaseUrl() {
   // order.html is deployed alongside index.html on the same host
   return location.origin + location.pathname.replace(/index\.html$/, "").replace(/\/$/, "") + "/order.html";
 }
+function qrUrlFor(table) {
+  return `${customerOrderBaseUrl()}?r=${restoId}&t=${encodeURIComponent(table.name)}`;
+}
+// Draws a QR at any pixel size off-screen and hands back the canvas.
+function qrCanvasFor(url, size) {
+  if (!window.QRCode) return null;
+  const holder = document.createElement("div");
+  holder.style.cssText = "position:fixed;left:-9999px;top:0;";
+  document.body.appendChild(holder);
+  try {
+    new QRCode(holder, { text: url, width: size, height: size, colorDark: "#0D1E19", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+    return holder.querySelector("canvas");
+  } finally { holder.remove(); }
+}
+// A print-ready sticker: QR + "Table X" + "Scan to order" on white.
+function qrStickerDataUrl(table, size = 640) {
+  const qr = qrCanvasFor(qrUrlFor(table), size);
+  if (!qr) return null;
+  const pad = Math.round(size * 0.09), cap = Math.round(size * 0.24);
+  const W = size + pad * 2, H = size + pad * 2 + cap;
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
+  x.drawImage(qr, pad, pad, size, size);
+  x.fillStyle = "#0D1E19"; x.textAlign = "center";
+  x.font = `700 ${Math.round(size * 0.085)}px 'Bricolage Grotesque','Sora',Arial,sans-serif`;
+  x.fillText("Table " + table.name, W / 2, pad + size + Math.round(cap * 0.5), W - pad);
+  x.fillStyle = "#66726C";
+  x.font = `600 ${Math.round(size * 0.048)}px Inter,Arial,sans-serif`;
+  x.fillText("Scan to order", W / 2, pad + size + Math.round(cap * 0.82));
+  return c.toDataURL("image/png");
+}
+function downloadDataUrl(url, filename) {
+  const a = document.createElement("a");
+  a.download = filename; a.href = url;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+let qrGridSig = "";
 function renderQrTableGrid() {
   const el = $("qrTableGrid");
-  if (!tablesCache.length) { el.innerHTML = `<div class="empty-note">Add tables in "Tables & Orders" first — a QR code is generated per table.</div>`; return; }
-  el.innerHTML = tablesCache.map(t => `
-    <div class="qr-table-card">
-      <div class="qr-code-box" id="qrbox-${t.id}"></div>
-      <div class="qr-table-name">${t.name}</div>
-      <button class="btn-ghost qr-download-btn" data-id="${t.id}" data-name="${t.name}">⬇ Download</button>
-    </div>`).join("");
-  tablesCache.forEach(t => {
-    const url = `${customerOrderBaseUrl()}?r=${restoId}&t=${encodeURIComponent(t.name)}`;
-    if (window.QRCode) new QRCode($(`qrbox-${t.id}`), { text: url, width: 132, height: 132, colorDark: "#161A23", colorLight: "#ffffff" });
-  });
-  el.querySelectorAll(".qr-download-btn").forEach(b => {
-    b.onclick = () => {
-      const box = $(`qrbox-${b.dataset.id}`);
-      const img = box.querySelector("img") || box.querySelector("canvas");
-      const link = document.createElement("a");
-      link.download = `QR-Table-${b.dataset.name}.png`;
-      link.href = img.tagName === "CANVAS" ? img.toDataURL("image/png") : img.src;
-      link.click();
-    };
-  });
+  if (!el) return;
+  // QR codes are only redrawn when the table list (or link) actually changes,
+  // not on every incoming order/call.
+  const sig = restoId + "|" + customerOrderBaseUrl() + "|" + tablesCache.map(t => `${t.id}:${t.name}:${t.floor || ""}`).join(",");
+  if (sig !== qrGridSig) {
+    qrGridSig = sig;
+    if (!tablesCache.length) {
+      el.innerHTML = `<div class="qx-empty qx-qr-none"><span class="qx-empty-ico">${SQ(SQP.inbox)}</span><b>No tables yet</b><span>Add tables in Tables &amp; Orders first. A QR code is created for each one automatically.</span></div>`;
+    } else {
+      el.innerHTML = tablesCache.map(tb => `
+        <article class="qx-qr" data-id="${tb.id}" data-search="${escapeHtml((tb.name + " " + (tb.floor || "")).toLowerCase())}">
+          <div class="qx-qr-code" id="qrbox-${tb.id}"></div>
+          <div class="qx-qr-meta"><b>Table ${escapeHtml(tb.name)}</b><small>${escapeHtml(tb.floor || "Scan to order")}</small></div>
+          <div class="qx-qr-btns">
+            <button type="button" data-qr="dl" title="Download print-ready image">${SQ(SQP.down)}Download</button>
+            <button type="button" data-qr="copy" title="Copy link" aria-label="Copy ordering link for table ${escapeHtml(tb.name)}">${SQ(SQP.link)}</button>
+            <button type="button" data-qr="open" title="Preview what guests see" aria-label="Preview table ${escapeHtml(tb.name)}">${SQ(SQP.open)}</button>
+          </div>
+        </article>`).join("");
+      tablesCache.forEach(tb => {
+        if (window.QRCode) new QRCode($(`qrbox-${tb.id}`), { text: qrUrlFor(tb), width: 150, height: 150, colorDark: "#0D1E19", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+      });
+    }
+  }
+  applyQrTableFilter();
 }
+function applyQrTableFilter() {
+  const q = ($("qrTableSearch")?.value || "").trim().toLowerCase();
+  document.querySelectorAll("#qrTableGrid .qx-qr").forEach(c => c.classList.toggle("hidden", !!q && !c.dataset.search.includes(q)));
+}
+$("qrTableSearch").addEventListener("input", applyQrTableFilter);
+$("qrTableGrid").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-qr]");
+  if (!b) return;
+  const tb = tablesCache.find(t => t.id === b.closest(".qx-qr").dataset.id);
+  if (!tb) return;
+  if (b.dataset.qr === "dl") {
+    const url = qrStickerDataUrl(tb, 640);
+    if (!url) { toast("QR library didn't load. Check your connection and refresh."); return; }
+    downloadDataUrl(url, `QR-Table-${tb.name}.png`);
+  } else if (b.dataset.qr === "copy") {
+    try { await navigator.clipboard.writeText(qrUrlFor(tb)); toast(`Link for table ${tb.name} copied`); }
+    catch (err) { window.prompt("Copy this link:", qrUrlFor(tb)); }
+  } else if (b.dataset.qr === "open") {
+    window.open(qrUrlFor(tb), "_blank", "noopener");
+  }
+});
+$("qrDownloadAllBtn").onclick = () => {
+  if (!tablesCache.length) { toast("Add tables first"); return; }
+  toast(`Downloading ${tablesCache.length} QR code${tablesCache.length === 1 ? "" : "s"}…`);
+  tablesCache.forEach((tb, i) => setTimeout(() => {
+    const url = qrStickerDataUrl(tb, 640);
+    if (url) downloadDataUrl(url, `QR-Table-${tb.name}.png`);
+  }, i * 450));
+};
+// Opens a clean sheet with every table's sticker (2 per row) and prints it.
+$("qrPrintAllBtn").onclick = () => {
+  if (!tablesCache.length) { toast("Add tables first"); return; }
+  const w = window.open("", "_blank");
+  if (!w) { toast("Allow pop-ups for this site to print"); return; }
+  const cards = tablesCache.map(tb => {
+    const img = qrStickerDataUrl(tb, 420);
+    return img ? `<figure><img src="${img}" alt="QR for table ${escapeHtml(tb.name)}"></figure>` : "";
+  }).join("");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Table QR codes — ${escapeHtml(restoData?.name || "")}</title>
+    <style>
+      *{box-sizing:border-box}body{margin:0;padding:18px;font-family:Inter,Arial,sans-serif;color:#0D1E19}
+      h1{font-size:15px;margin:0 0 14px;font-weight:600;color:#66726C}
+      .g{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+      figure{margin:0;border:1.5px dashed #bbb;border-radius:14px;padding:10px;break-inside:avoid;text-align:center}
+      img{width:100%;max-width:340px;height:auto}
+      @media print{body{padding:0}h1{display:none}}
+    </style></head><body><h1>${escapeHtml(restoData?.name || "Table QR codes")} · cut along the dashed lines</h1><div class="g">${cards}</div>
+    <script>window.onload=function(){setTimeout(function(){window.print()},350)}<\/script></body></html>`);
+  w.document.close();
+};
+
+// ---------- live lists ----------
+function qrWaitMins(rec) {
+  const ms = rec.createdAt?.toDate ? rec.createdAt.toDate().getTime() : Date.now();
+  return Math.max(0, Math.floor((Date.now() - ms) / 60000));
+}
+function qrWaitText(mins) { return mins <= 0 ? t("just now") : mins + t("m ago"); }
+
+function renderQrStats() {
+  const on = !!restoData.qrOrderingEnabled;
+  const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+  set("qxCallsNum", waiterCallsCache.length);
+  set("qxOrdersNum", customerOrdersCache.length);
+  set("qxTablesNum", tablesCache.length);
+  set("qxStateNum", on ? "Live" : "Off");
+  set("qrSwitchState", on ? "Ordering is on" : "Ordering is off");
+  $("qxStatCalls")?.classList.toggle("hot", waiterCallsCache.length > 0);
+  $("qxStatOrders")?.classList.toggle("warn", customerOrdersCache.length > 0);
+  $("qxStatState")?.classList.toggle("live", on);
+  $("qxStatState")?.classList.toggle("off", !on);
+}
+
 function renderWaiterCallsPanel() {
   const el = $("qrTableRequestsList");
   if (!el) return;
-  $("qrTableRequestsCount").textContent = waiterCallsCache.length ? `${waiterCallsCache.length} pending` : "";
-  const panelHead = document.querySelector('#qrTableRequestsPanel .panel-head h2');
-  if (panelHead) panelHead.textContent = t("🔔 Waiter calls");
-  if (!waiterCallsCache.length) { el.innerHTML = `<div class="empty-note">${t("No waiter calls right now.")}</div>`; return; }
-  el.innerHTML = waiterCallsCache.map(r => {
-    const mins = Math.max(0, Math.round((Date.now() - (r.createdAt?.toDate ? r.createdAt.toDate().getTime() : Date.now())) / 60000));
-    return `
-    <div class="list-row qr-incoming-row" data-id="${r.id}">
-      <div class="lr-main">
-        <div class="lr-title">🔔 ${t("Table")} ${r.tableName}${r.floor ? " · " + r.floor : ""}${r.seatLabels?.length ? " · " + t("Seat") + " " + seatLabelsText(r.seatLabels) : ""}</div>
-        <div class="lr-sub">${t("Asked for a waiter")} · ${mins <= 0 ? t("just now") : mins + t("m ago")}</div>
+  const cnt = $("qrTableRequestsCount");
+  cnt.textContent = waiterCallsCache.length ? `${waiterCallsCache.length} waiting` : "";
+  cnt.classList.toggle("hot", waiterCallsCache.length > 0);
+  const head = document.querySelector("#qrTableRequestsPanel .qx-card-head h2");
+  if (head) head.lastChild.textContent = t("Waiter calls");
+  if (!waiterCallsCache.length) {
+    el.innerHTML = `<div class="qx-empty"><span class="qx-empty-ico">${SQ(SQP.check)}</span><b>${t("No waiter calls right now.")}</b><span>New calls appear here and ring this device until you resolve them.</span></div>`;
+    return;
+  }
+  el.innerHTML = waiterCallsCache.map(r => `
+    <div class="qx-call" data-id="${r.id}">
+      <span class="qx-call-ico">${SQ(SQP.bell)}</span>
+      <div class="qx-call-main">
+        <b>${t("Table")} ${escapeHtml(r.tableName)}${r.floor ? " · " + escapeHtml(r.floor) : ""}${r.seatLabels?.length ? " · " + t("Seat") + " " + seatLabelsText(r.seatLabels) : ""}</b>
+        <small>${t("Asked for a waiter")} · ${qrWaitText(qrWaitMins(r))}</small>
       </div>
-      <div class="lr-actions">
-        <button class="lr-btn" data-act="resolve-waiter" data-id="${r.id}">${t("✅ Resolved")}</button>
-      </div>
-    </div>`;
-  }).join("");
-  el.querySelectorAll("[data-act='resolve-waiter']").forEach(b => b.onclick = async (e) => {
-    e.stopPropagation();
-    await updateDoc(doc(db, "restaurants", restoId, "waiterCalls", b.dataset.id), { status: "resolved" });
-  });
+      <button type="button" class="qx-btn ok" data-act="resolve-waiter" data-id="${r.id}">${SQ(SQP.check)}${t("Resolved")}</button>
+    </div>`).join("");
 }
+
+function renderQrIncoming() {
+  const el = $("qrIncomingList");
+  if (!el) return;
+  const cnt = $("qrIncomingCount");
+  cnt.textContent = customerOrdersCache.length ? `${customerOrdersCache.length} waiting` : "";
+  cnt.classList.toggle("hot", customerOrdersCache.length > 0);
+  if (!customerOrdersCache.length) {
+    el.innerHTML = `<div class="qx-empty"><span class="qx-empty-ico">${SQ(SQP.inbox)}</span><b>${t("No incoming customer orders right now.")}</b><span>${restoData.qrOrderingEnabled ? "When a guest sends an order from their table, it shows up here for you to approve." : "Customer ordering is switched off. Turn it on above so guests can order from the QR code."}</span></div>`;
+    return;
+  }
+  el.innerHTML = customerOrdersCache.map(o => {
+    const mins = qrWaitMins(o);
+    const state = mins >= 5 ? "overdue" : (mins >= 2 ? "late" : "");
+    const items = o.items || [];
+    const total = o.total != null ? Number(o.total) : items.reduce((s, i) => s + (Number(i.price ?? i.unitPrice ?? 0) * (Number(i.qty) || 1)), 0);
+    const phone = String(o.customerPhone || "").replace(/\D/g, "");
+    const lines = items.map(i => {
+      const addons = (i.addons || []).map(a => escapeHtml(typeof a === "string" ? a : a.name)).join(", ");
+      return `<li><span class="q">${Number(i.qty) || 1}×</span><span>${escapeHtml(i.name)}${i.variant ? ` <em>(${escapeHtml(i.variant)})</em>` : ""}</span>${addons ? `<small>+ ${addons}</small>` : ""}${i.note ? `<small>Note: ${escapeHtml(i.note)}</small>` : ""}</li>`;
+    }).join("");
+    return `
+    <article class="qx-order ${state}" data-id="${o.id}">
+      <div class="qx-order-top">
+        <span class="qx-tag">${t("Table")} ${escapeHtml(o.tableName)}</span>
+        ${o.seatLabels?.length ? `<span class="qx-seat">${t("Seat")} ${seatLabelsText(o.seatLabels)}</span>` : ""}
+        <span class="qx-wait">${SQ(SQP.clock)}${qrWaitText(mins)}</span>
+      </div>
+      <div class="qx-guest"><b>${escapeHtml(o.customerName) || t("Guest")}</b>${phone ? `<a href="tel:+${phoneDigits(phone)}">${SQ(SQP.phone)}${escapeHtml(phone)}</a>` : ""}</div>
+      <ul class="qx-lines">${lines}</ul>
+      <div class="qx-order-foot">
+        <span class="qx-total">${money(total)}</span>
+        <button type="button" class="qx-btn no" data-act="reject" data-id="${o.id}">${t("Reject")}</button>
+        <button type="button" class="qx-btn ok" data-act="approve" data-id="${o.id}">${SQ(SQP.check)}${t("Approve")}</button>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+$("qrIncomingList").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const co = customerOrdersCache.find(o => o.id === b.dataset.id);
+  if (!co) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.act === "approve") {
+      await approveCustomerOrder(co);
+    } else if (b.dataset.act === "reject") {
+      const ok = await showConfirm("The guest will see that their order wasn't accepted.", { title: "Reject this order?", danger: true, okLabel: "Reject" });
+      if (ok) await updateDoc(doc(db, "restaurants", restoId, "customerOrders", co.id), { status: "rejected" });
+    }
+  } catch (err) {
+    console.error(err);
+    toast("Couldn't update that order. Check your connection and try again.");
+  }
+  b.disabled = false;
+});
+$("qrTableRequestsList").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-act='resolve-waiter']");
+  if (!b) return;
+  b.disabled = true;
+  try { await updateDoc(doc(db, "restaurants", restoId, "waiterCalls", b.dataset.id), { status: "resolved" }); }
+  catch (err) { console.error(err); toast("Couldn't resolve that call. Try again."); b.disabled = false; }
+});
+
 function renderQrOrderingView() {
+  $("qrOrderingEnabledToggle").checked = !!restoData.qrOrderingEnabled;
+  renderQrStats();
   renderQrTableGrid();
   renderWaiterCallsPanel();
-  $("qrOrderingEnabledToggle").checked = !!restoData.qrOrderingEnabled;
-  const el = $("qrIncomingList");
-  $("qrIncomingCount").textContent = customerOrdersCache.length ? `${customerOrdersCache.length} pending` : "";
-  if (!customerOrdersCache.length) { el.innerHTML = `<div class="empty-note">${t("No incoming customer orders right now.")}</div>`; return; }
-  el.innerHTML = customerOrdersCache.map(o => `
-    <div class="list-row qr-incoming-row" data-id="${o.id}">
-      <div class="lr-main">
-        <div class="lr-title">${t("Table")} ${escapeHtml(o.tableName)}${o.seatLabels?.length ? " · " + t("Seat") + " " + seatLabelsText(o.seatLabels) : ""} · ${escapeHtml(o.customerName) || t("Guest")} · ${o.items.length} ${o.items.length === 1 ? t("item") : t("items")}</div>
-        <div class="lr-sub">${o.items.map(i => `${i.qty}× ${escapeHtml(i.name)}`).join(", ")}</div>
-      </div>
-      <div class="lr-actions">
-        <button class="lr-btn" data-act="approve" data-id="${o.id}">${t("✅ Approve")}</button>
-        <button class="lr-btn lr-danger" data-act="reject" data-id="${o.id}">${t("✕ Reject")}</button>
-      </div>
-    </div>`).join("");
-  el.querySelectorAll("[data-act='approve']").forEach(b => b.onclick = async (e) => {
-    e.stopPropagation();
-    await approveCustomerOrder(customerOrdersCache.find(o => o.id === b.dataset.id));
-  });
-  el.querySelectorAll("[data-act='reject']").forEach(b => b.onclick = async (e) => {
-    e.stopPropagation();
-    await updateDoc(doc(db, "restaurants", restoId, "customerOrders", b.dataset.id), { status: "rejected" });
-  });
+  renderQrIncoming();
 }
+// keep "waiting for 3 min" labels fresh while the screen is open
+setInterval(() => {
+  if ($("view-qrorder")?.classList.contains("active") && (customerOrdersCache.length || waiterCallsCache.length)) {
+    renderWaiterCallsPanel(); renderQrIncoming();
+  }
+}, 20000);
+
 // Mirrors the kitchen status onto every QR order linked to a running order, so the
 // customer's phone (order.html) can show Received -> Preparing -> Ready -> Served.
 async function syncCustomerOrderStatus(orderId, patch) {
@@ -1645,6 +1917,7 @@ $("qrOrderingEnabledToggle").onchange = async () => {
   // Mirrored into the public doc too — see saveSettingsBtn above for why.
   await setDoc(doc(db, "restaurants", restoId, "public", "info"), { qrOrderingEnabled: val }, { merge: true });
   restoData.qrOrderingEnabled = val;
+  renderQrStats(); renderQrIncoming();
   toast(val ? "Customer ordering enabled" : "Customer ordering disabled");
 };
 
@@ -2358,17 +2631,51 @@ function renderMenuBuilder() {
   });
 }
 
-// ===================== STAFF MANAGEMENT (owner-password-locked) =====================
-// The staff area (personal details, salary, attendance, leave) is protected
-// by its own password — separate from the restaurant's login credentials —
-// so that any staff member using the same signed-in device to take orders
-// can't casually browse it. Only whoever knows the current staff password
-// can view it or change it, and the owner is the only one who ever learns it
-// (they set it the first time the tab is opened).
+// ---------- small inline icon set shared by the Staff and QR screens ----------
+const SQ = (d) => `<svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const SQP = {
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
+  chat: '<path d="M20 11.5a8 8 0 0 1-11.7 7L4 20l1.5-4.2A8 8 0 1 1 20 11.5z"/>',
+  cal: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  user: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+  users: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5a6 6 0 0 1 12 0"/><path d="M16 5.6a3.2 3.2 0 0 1 0 5.8M18 14.5a6 6 0 0 1 3 5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 21h4"/>',
+  inbox: '<path d="M4 13l2.5-7h11L20 13"/><path d="M4 13v6h16v-6h-5l-1 2h-4l-1-2H4z"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/>',
+  open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
+  down: '<path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/>',
+};
+
+// ===================== STAFF =====================
+// The staff area (personal details + attendance) asks for the owner's staff
+// password once. After that it STAYS open while the owner moves around the
+// app or switches windows -- it only locks again when they press "Lock now",
+// sign out, or close the browser tab.
+const ATT_META = {
+  present: { label: "Present", color: "#12995A" },
+  halfday: { label: "Half-day", color: "#D49A12" },
+  leave: { label: "Leave", color: "#2B79B5" },
+  absent: { label: "Absent", color: "#C4293D" },
+  none: { label: "Not marked", color: "#B6AE9B" },
+};
+let staffFilter = { q: "", role: "", status: "all" };
+
+function staffUnlockKey() { return "staffUnlocked:" + (restoId || ""); }
+function isStaffUnlocked() {
+  if (!staffUnlocked) { try { staffUnlocked = sessionStorage.getItem(staffUnlockKey()) === "1"; } catch (e) { /* storage blocked */ } }
+  return staffUnlocked;
+}
+function setStaffUnlocked(v) {
+  staffUnlocked = !!v;
+  try { if (v) sessionStorage.setItem(staffUnlockKey(), "1"); else sessionStorage.removeItem(staffUnlockKey()); } catch (e) { /* storage blocked */ }
+}
 
 function renderStaffView() {
   const hasPin = !!restoData.staffPinHash;
-  if (staffUnlocked) {
+  if (isStaffUnlocked()) {
     $("staffLockScreen").classList.add("hidden");
     $("staffContent").classList.remove("hidden");
     renderStaffGrid();
@@ -2380,29 +2687,27 @@ function renderStaffView() {
   $("staffLockInput").value = "";
   if (hasPin) {
     $("staffLockTitle").textContent = "Staff area is locked";
-    $("staffLockSub").textContent = "Enter the owner's staff password to view staff, attendance and leave records.";
+    $("staffLockSub").textContent = "Enter the owner's staff password to view staff and attendance.";
     $("staffLockConfirmWrap").classList.add("hidden");
     $("staffLockSubmitBtn").textContent = "Unlock";
   } else {
     $("staffLockTitle").textContent = "Set a staff password";
-    $("staffLockSub").textContent = "This tab holds staff personal details, salary and attendance. Set a password now — only whoever knows it (you, the owner) can open this tab or change the password later.";
+    $("staffLockSub").textContent = "This tab holds your team's personal details and attendance. Set a password now: only whoever knows it (you, the owner) can open this tab or change the password.";
     $("staffLockConfirmWrap").classList.remove("hidden");
     $("staffLockConfirmInput").value = "";
     $("staffLockSubmitBtn").textContent = "Set password & continue";
   }
+  setTimeout(() => { try { $("staffLockInput").focus(); } catch (e) { /* hidden */ } }, 50);
 }
-
 function staffLockErr(msg) {
   const e = $("staffLockError");
   e.textContent = msg;
   e.classList.remove("hidden");
 }
-
 $("staffLockSubmitBtn").onclick = async () => {
   const hasPin = !!restoData.staffPinHash;
   const pass = $("staffLockInput").value;
   $("staffLockError").classList.add("hidden");
-
   if (!hasPin) {
     const confirm = $("staffLockConfirmInput").value;
     if (pass.length < 4) { staffLockErr("Password needs at least 4 characters."); return; }
@@ -2410,37 +2715,21 @@ $("staffLockSubmitBtn").onclick = async () => {
     const hash = await sha256Hex(pass);
     await setDoc(doc(db, "restaurants", restoId), { staffPinHash: hash }, { merge: true });
     restoData.staffPinHash = hash;
-    staffUnlocked = true;
+    setStaffUnlocked(true);
     toast("Staff password set");
     renderStaffView();
     return;
   }
-
   const hash = await sha256Hex(pass);
   if (hash !== restoData.staffPinHash) { staffLockErr("Incorrect password."); return; }
-  staffUnlocked = true;
+  setStaffUnlocked(true);
   renderStaffView();
 };
 $("staffLockInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && $("staffLockConfirmWrap").classList.contains("hidden")) $("staffLockSubmitBtn").click(); });
 $("staffLockConfirmInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("staffLockSubmitBtn").click(); });
 
-$("staffLockNowBtn").onclick = () => { staffUnlocked = false; renderStaffView(); };
-
-// ---- Auto-lock the instant the owner switches away from this browser tab /
-// app, minimizes the window, or closes the software — not just when they
-// navigate to another in-app tab (handled in showView). This closes the
-// loophole of an unlocked staff tab being left open and walked away from.
-function autoLockStaffArea() {
-  if (!staffUnlocked) return;
-  staffUnlocked = false;
-  if ($("view-staff")?.classList.contains("active")) renderStaffView();
-}
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") autoLockStaffArea();
-});
-window.addEventListener("blur", autoLockStaffArea);
-window.addEventListener("pagehide", autoLockStaffArea);
-window.addEventListener("beforeunload", autoLockStaffArea);
+// Only the owner locks it again, on purpose. No auto-lock on tab switch / blur / navigation.
+$("staffLockNowBtn").onclick = () => { setStaffUnlocked(false); renderStaffView(); toast("Staff area locked"); };
 
 $("staffChangePassBtn").onclick = async () => {
   const current = await showPrompt("Enter your current staff password to continue.", { title: "Confirm current password" });
@@ -2465,132 +2754,245 @@ function avatarColorFor(id) {
   return STAFF_AVATAR_COLORS[hash % STAFF_AVATAR_COLORS.length];
 }
 
+// ---- attendance helpers ----
+// One lookup of {staffId: {YYYY-MM-DD: status}} built from the live month window
+// (this month + last 7 days) so the cards never need their own queries.
+function buildAttendanceIndex() {
+  const idx = {};
+  const put = (a) => { if (!a.staffId || !a.date) return; (idx[a.staffId] = idx[a.staffId] || {})[a.date] = a.status || "none"; };
+  staffRangeAttCache.forEach(put);
+  todayAttendanceCache.forEach(put);
+  return idx;
+}
 function statusForStaffToday(staffId) {
   const rec = todayAttendanceCache.find(a => a.staffId === staffId);
   return rec ? rec.status : "none";
 }
+function phoneDigits(p) {
+  let d = String(p || "").replace(/\D/g, "");
+  if (d.length === 11 && d[0] === "0") d = d.slice(1);
+  if (d.length === 10) d = "91" + d;
+  return d;
+}
+function fmtClock(hhmm) {
+  if (!hhmm) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  if (isNaN(h)) return "";
+  return `${h % 12 || 12}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+function isOnShiftNow(s) {
+  if (!s.shiftStart || !s.shiftEnd) return false;
+  const now = new Date(), cur = now.getHours() * 60 + now.getMinutes();
+  const toMin = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
+  const a = toMin(s.shiftStart), b = toMin(s.shiftEnd);
+  return a <= b ? (cur >= a && cur < b) : (cur >= a || cur < b); // overnight shifts wrap past midnight
+}
+function tenureText(joinDate) {
+  if (!joinDate) return "";
+  const j = new Date(joinDate + "T00:00:00");
+  if (isNaN(j)) return "";
+  const now = new Date();
+  let months = (now.getFullYear() - j.getFullYear()) * 12 + (now.getMonth() - j.getMonth());
+  if (now.getDate() < j.getDate()) months--;
+  if (months < 0) return "Joining soon";
+  if (months < 1) { const d = Math.max(0, Math.floor((now - j) / 86400000)); return d === 0 ? "Joined today" : `${d} day${d === 1 ? "" : "s"} with you`; }
+  const y = Math.floor(months / 12), m = months % 12;
+  return `${y ? y + "y " : ""}${m ? m + "m" : ""}`.trim() + " with you";
+}
+
+function renderStaffRoster(counts, total) {
+  const box = $("staffRoster");
+  if (!box) return;
+  const now = new Date();
+  const dateTxt = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" });
+  if (!total) {
+    box.innerHTML = `<div class="sf-roster-main"><div class="sf-roster-top"><span class="sf-roster-num">0</span><span class="sf-roster-cap"><b>${escapeHtml(dateTxt)}</b><br>No team members yet</span></div>
+      <div class="sf-meter"></div></div>
+      <div class="sf-roster-side"><span class="sf-side-label">Add your first team member to start marking attendance.</span></div>`;
+    return;
+  }
+  const inCount = counts.present + counts.halfday;
+  const w = (n) => (n / total * 100).toFixed(2) + "%";
+  const present = staffCache.filter(s => { const st = statusForStaffToday(s.id); return st === "present" || st === "halfday"; });
+  const faces = present.slice(0, 6).map(s =>
+    `<span class="sf-face" style="background:${avatarColorFor(s.id)}" title="${escapeHtml(s.name)}">${escapeHtml(initialsOf(s.name))}</span>`).join("")
+    + (present.length > 6 ? `<span class="sf-face more">+${present.length - 6}</span>` : "");
+  box.innerHTML = `
+    <div class="sf-roster-main">
+      <div class="sf-roster-top">
+        <span class="sf-roster-num">${inCount}</span>
+        <span class="sf-roster-cap"><b>of ${total} in today</b><br>${escapeHtml(dateTxt)}</span>
+      </div>
+      <div class="sf-meter" role="img" aria-label="${counts.present} present, ${counts.halfday} half-day, ${counts.leave} on leave, ${counts.absent} absent, ${counts.none} not marked">
+        <i class="m-present" style="width:${w(counts.present)}"></i><i class="m-half" style="width:${w(counts.halfday)}"></i><i class="m-leave" style="width:${w(counts.leave)}"></i><i class="m-absent" style="width:${w(counts.absent)}"></i>
+      </div>
+      <div class="sf-legend">
+        ${["present", "halfday", "leave", "absent", "none"].map(k => `<span><i style="background:${k === "none" ? "rgba(255,255,255,.35)" : ATT_META[k].color}"></i><b>${counts[k]}</b>${ATT_META[k].label}</span>`).join("")}
+      </div>
+    </div>
+    <div class="sf-roster-side">
+      <span class="sf-side-label">${present.length ? "On the floor today" : "Nobody marked present yet"}</span>
+      ${faces ? `<div class="sf-faces">${faces}</div>` : ""}
+      ${counts.none > 0
+        ? `<button type="button" class="sf-markall" id="staffMarkAllBtn">${SQ(SQP.check)}Mark ${counts.none} unmarked as present</button>`
+        : `<span class="sf-roster-done">${SQ(SQP.check)}Everyone is marked for today</span>`}
+    </div>`;
+}
+
+function staffCardHtml(s, idx, today, weekDays, monthPrefix) {
+  const days = idx[s.id] || {};
+  const st = days[today] || "none";
+  const meta = ATT_META[st];
+  const onShift = (st === "present" || st === "halfday") && isOnShiftNow(s);
+  const monthCounts = { present: 0, halfday: 0, leave: 0, absent: 0 };
+  Object.keys(days).forEach(d => { if (d.startsWith(monthPrefix) && monthCounts.hasOwnProperty(days[d])) monthCounts[days[d]]++; });
+  const digits = phoneDigits(s.phone);
+  const shift = s.shiftStart && s.shiftEnd ? `${fmtClock(s.shiftStart)} – ${fmtClock(s.shiftEnd)}` : "";
+  const tenure = tenureText(s.joinDate);
+  const week = weekDays.map(d => {
+    const ds = days[d.ds] || "none";
+    return `<div class="sf-day s-${ds}${d.ds === today ? " today" : ""}" title="${escapeHtml(d.label)}: ${ATT_META[ds].label}"><i></i>${d.letter}</div>`;
+  }).join("");
+  const seg = ["present", "halfday", "leave", "absent"].map(k =>
+    `<button type="button" data-s="${k}" data-mark="${s.id}|${k}" class="${st === k ? "on" : ""}" aria-pressed="${st === k}">${k === "halfday" ? "Half" : ATT_META[k].label}</button>`).join("");
+  return `
+  <article class="sf-card" data-st="${st}" data-id="${s.id}">
+    <div class="sf-card-top">
+      <div class="sf-avatar" style="background:${avatarColorFor(s.id)}">${escapeHtml(initialsOf(s.name))}${onShift ? '<span class="sf-pulse" title="On shift now"></span>' : ""}</div>
+      <div class="sf-id">
+        <div class="sf-name">${escapeHtml(s.name) || "Unnamed"}</div>
+        <span class="sf-role">${escapeHtml(s.role) || "Staff"}</span>
+      </div>
+      <button type="button" class="sf-edit" data-edit="${s.id}" aria-label="Edit ${escapeHtml(s.name)}" title="Edit">${SQ(SQP.pencil)}</button>
+    </div>
+    ${(shift || tenure || onShift) ? `<div class="sf-meta">
+      ${onShift ? `<span class="sf-onshift">${SQ(SQP.clock)}On shift now</span>` : ""}
+      ${shift && !onShift ? `<span>${SQ(SQP.clock)}${shift}</span>` : ""}
+      ${shift && onShift ? `<span>${shift}</span>` : ""}
+      ${tenure ? `<span>${SQ(SQP.user)}${tenure}</span>` : ""}
+    </div>` : ""}
+    ${digits ? `<div class="sf-contact"><a href="tel:+${digits}">${SQ(SQP.phone)}Call</a><a class="wa" href="https://wa.me/${digits}" target="_blank" rel="noopener">${SQ(SQP.chat)}WhatsApp</a></div>` : ""}
+    <div class="sf-today">
+      <div class="sf-today-row"><b>${meta.label} today</b><small>${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</small></div>
+      <div class="sf-seg" role="group" aria-label="Today's attendance for ${escapeHtml(s.name)}">${seg}</div>
+    </div>
+    <div class="sf-month">
+      <div class="sf-month-head"><b>This month</b><small>${new Date().toLocaleDateString("en-IN", { month: "long" })}</small></div>
+      <div class="sf-counts">
+        <span><i style="background:${ATT_META.present.color}"></i><b>${monthCounts.present}</b> present</span>
+        <span><i style="background:${ATT_META.halfday.color}"></i><b>${monthCounts.halfday}</b> half</span>
+        <span><i style="background:${ATT_META.leave.color}"></i><b>${monthCounts.leave}</b> leave</span>
+        <span><i style="background:${ATT_META.absent.color}"></i><b>${monthCounts.absent}</b> absent</span>
+      </div>
+      <div class="sf-week" aria-label="Last 7 days">${week}</div>
+    </div>
+    <button type="button" class="sf-cal" data-cal="${s.id}">${SQ(SQP.cal)}Attendance calendar</button>
+  </article>`;
+}
 
 function renderStaffGrid() {
-  if (!$("staffGrid")) return;
+  const grid = $("staffGrid");
+  if (!grid) return;
   const today = todayStr();
-  const totals = { present: 0, leave: 0, absent: 0 };
-  todayAttendanceCache.forEach(a => {
-    if (a.status === "present" || a.status === "halfday") totals.present++;
-    else if (a.status === "leave") totals.leave++;
-    else if (a.status === "absent") totals.absent++;
-  });
-  $("staffStatTotal").textContent = staffCache.length;
-  $("staffStatPresent").textContent = totals.present;
-  $("staffStatLeave").textContent = totals.leave;
-  $("staffStatAbsent").textContent = totals.absent;
+  const idx = buildAttendanceIndex();
+  const stOf = (s) => (idx[s.id] && idx[s.id][today]) || "none";
 
-  $("staffGrid").innerHTML = staffCache.length ? staffCache.map(s => {
-    const status = statusForStaffToday(s.id);
-    const statusLabel = { present: "Present today", halfday: "Half-day today", leave: "On leave today", absent: "Absent today", none: "Not marked yet" }[status];
-    return `
-    <div class="staff-card">
-      <div class="staff-card-top">
-        <div class="staff-avatar" style="background:${avatarColorFor(s.id)}">${escapeHtml(initialsOf(s.name))}</div>
-        <div class="staff-name-block">
-          <div class="staff-name">${escapeHtml(s.name) || "Unnamed"}</div>
-          <div class="staff-role">${escapeHtml(s.role) || "Staff"}</div>
-        </div>
-        <button class="staff-edit-btn" data-edit="${s.id}" title="Edit">✎</button>
-      </div>
-      ${s.phone ? `<div class="staff-phone">📞 ${escapeHtml(s.phone)}</div>` : ""}
-      <div class="staff-today-row">
-        <span class="staff-today-label">${today.split("-").reverse().join("/")}</span>
-        <span class="staff-today-status ${status}">${statusLabel}</span>
-      </div>
-      <div class="staff-att-btns">
-        <button type="button" class="sab-btn p ${status === "present" ? "active" : ""}" data-mark="${s.id}|present">Present</button>
-        <button type="button" class="sab-btn h ${status === "halfday" ? "active" : ""}" data-mark="${s.id}|halfday">Half-day</button>
-        <button type="button" class="sab-btn l ${status === "leave" ? "active" : ""}" data-mark="${s.id}|leave">Leave</button>
-        <button type="button" class="sab-btn a ${status === "absent" ? "active" : ""}" data-mark="${s.id}|absent">Absent</button>
-      </div>
-      <button type="button" class="staff-cal-link" data-cal="${s.id}">📅 View attendance calendar</button>
-    </div>`;
-  }).join("") : `<div class="empty-note">No staff added yet. Tap "+ Add staff" to get started.</div>`;
+  const counts = { present: 0, halfday: 0, leave: 0, absent: 0, none: 0 };
+  staffCache.forEach(s => { const k = stOf(s); counts[counts.hasOwnProperty(k) ? k : "none"]++; });
+  renderStaffRoster(counts, staffCache.length);
 
-  $("staffGrid").querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openStaffModal(staffCache.find(s => s.id === b.dataset.edit)));
-  $("staffGrid").querySelectorAll("[data-mark]").forEach(b => b.onclick = () => {
-    const [staffId, status] = b.dataset.mark.split("|");
-    markAttendance(staffId, todayStr(), status);
+  const roles = [...new Set(staffCache.map(s => (s.role || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  $("staffSubline").textContent = staffCache.length
+    ? `${staffCache.length} team member${staffCache.length === 1 ? "" : "s"}${roles.length ? ` across ${roles.length} role${roles.length === 1 ? "" : "s"}` : ""}. Mark attendance as people arrive.`
+    : "Add your team to track attendance and shifts.";
+
+  // role dropdown (rebuilt only when the role list changes so the selection isn't lost)
+  const sel = $("staffRoleFilter");
+  const roleSig = roles.join("|");
+  if (sel.dataset.sig !== roleSig) {
+    sel.dataset.sig = roleSig;
+    sel.innerHTML = `<option value="">All roles</option>` + roles.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join("");
+  }
+  if (staffFilter.role && !roles.includes(staffFilter.role)) staffFilter.role = "";
+  sel.value = staffFilter.role;
+
+  // status chips
+  const chips = [["all", "All", staffCache.length, "#1B5E4A"], ["present", "Present", counts.present, ATT_META.present.color], ["halfday", "Half-day", counts.halfday, ATT_META.halfday.color],
+    ["leave", "Leave", counts.leave, ATT_META.leave.color], ["absent", "Absent", counts.absent, ATT_META.absent.color], ["none", "Not marked", counts.none, ATT_META.none.color]];
+  $("staffFilterChips").innerHTML = chips.map(([k, label, n, c]) =>
+    `<button type="button" class="sf-chip${staffFilter.status === k ? " on" : ""}" data-chip="${k}" style="--c:${c}"><i></i>${label}<em>${n}</em></button>`).join("");
+
+  const q = staffFilter.q.trim().toLowerCase();
+  const list = staffCache.filter(s => {
+    if (staffFilter.status !== "all" && stOf(s) !== staffFilter.status) return false;
+    if (staffFilter.role && (s.role || "").trim() !== staffFilter.role) return false;
+    if (q && !((s.name || "") + " " + (s.role || "") + " " + (s.phone || "")).toLowerCase().includes(q)) return false;
+    return true;
   });
-  $("staffGrid").querySelectorAll("[data-cal]").forEach(b => b.onclick = () => openAttendanceCalendar(b.dataset.cal));
-  renderPayrollCard();
+
+  if (!staffCache.length) {
+    grid.innerHTML = `<div class="sf-empty"><div class="sf-empty-ico">${SQ(SQP.users)}</div><h3>No staff added yet</h3><p>Add waiters, chefs and cashiers to track who is in today.</p><button type="button" class="btn-primary" data-act="add">Add your first staff member</button></div>`;
+    return;
+  }
+  if (!list.length) {
+    grid.innerHTML = `<div class="sf-empty"><div class="sf-empty-ico">${SQ(SQP.user)}</div><h3>No one matches</h3><p>Try a different name, role or status.</p><button type="button" class="btn-ghost" data-act="clear">Clear filters</button></div>`;
+    return;
+  }
+
+  const weekDays = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    weekDays.push({ ds: dateStrOf(d), letter: ["S", "M", "T", "W", "T", "F", "S"][d.getDay()], label: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) });
+  }
+  const monthPrefix = today.slice(0, 7);
+  grid.innerHTML = list.map(s => staffCardHtml(s, idx, today, weekDays, monthPrefix)).join("");
 }
 
-// ===================== PAYROLL & TIP POOL =====================
-// A live calculator, not a stored ledger — every number here is derived
-// fresh from the attendance records + each staff member's monthly salary,
-// so it can never drift out of sync with the attendance calendar above it.
-let payrollMonthAttCache = [];
-let payrollLoadedForMonth = null;
-function currentPayrollMonth() {
-  const el = $("payrollMonthInput");
-  if (el && el.value) return el.value; // "YYYY-MM"
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-async function loadPayrollMonthAttendance(monthStr) {
-  const [y, m] = monthStr.split("-").map(Number);
-  const start = `${monthStr}-01`;
-  const lastDay = new Date(y, m, 0).getDate();
-  const end = `${monthStr}-${String(lastDay).padStart(2, "0")}`;
-  const attRef = collection(db, "restaurants", restoId, "attendance");
-  const snap = await getDocs(query(attRef, where("date", ">=", start), where("date", "<=", end)));
-  payrollMonthAttCache = snap.docs.map(d => d.data());
-  payrollLoadedForMonth = monthStr;
-}
-function renderPayrollTable() {
-  const tipPool = Math.max(0, parseFloat($("payrollTipPool")?.value) || 0);
-  const rows = staffCache.map(s => {
-    const recs = payrollMonthAttCache.filter(a => a.staffId === s.id);
-    const present = recs.filter(a => a.status === "present").length;
-    const half = recs.filter(a => a.status === "halfday").length;
-    const offCount = recs.filter(a => a.status === "leave" || a.status === "absent").length;
-    const workUnits = present + half * 0.5;
-    const dailyRate = (s.salary || 0) / 30;
-    const basePay = Math.round(workUnits * dailyRate);
-    return { staff: s, present, half, offCount, workUnits, basePay };
-  });
-  const totalWorkUnits = rows.reduce((sum, r) => sum + r.workUnits, 0);
-  let tipTotal = 0, payableTotal = 0, baseTotal = 0;
-  const bodyHtml = rows.length ? rows.map(r => {
-    const tipShare = totalWorkUnits > 0 ? Math.round((r.workUnits / totalWorkUnits) * tipPool) : 0;
-    const payable = r.basePay + tipShare;
-    tipTotal += tipShare; payableTotal += payable; baseTotal += r.basePay;
-    return `<tr>
-      <td>${r.staff.name || "Unnamed"}</td>
-      <td>${r.present}</td>
-      <td>${r.half}</td>
-      <td>${r.offCount}</td>
-      <td>₹${r.basePay.toLocaleString("en-IN")}</td>
-      <td>₹${tipShare.toLocaleString("en-IN")}</td>
-      <td class="payroll-payable">₹${payable.toLocaleString("en-IN")}</td>
-    </tr>`;
-  }).join("") : `<tr><td colspan="7" class="empty-note">No staff to calculate payroll for.</td></tr>`;
-  $("payrollTableBody").innerHTML = bodyHtml;
-  $("payrollTotalBase").textContent = "₹" + baseTotal.toLocaleString("en-IN");
-  $("payrollTotalTip").textContent = "₹" + tipTotal.toLocaleString("en-IN");
-  $("payrollTotalPayable").textContent = "₹" + payableTotal.toLocaleString("en-IN");
-}
-async function renderPayrollCard() {
-  if (!$("payrollTableBody")) return;
-  if (!$("payrollMonthInput").value) $("payrollMonthInput").value = currentPayrollMonth();
-  const month = currentPayrollMonth();
-  if (payrollLoadedForMonth !== month) await loadPayrollMonthAttendance(month);
-  renderPayrollTable();
-}
-if ($("payrollMonthInput")) $("payrollMonthInput").onchange = renderPayrollCard;
-if ($("payrollTipPool")) $("payrollTipPool").oninput = renderPayrollTable;
+// One set of listeners for the whole screen (cards are re-rendered often).
+$("staffGrid").addEventListener("click", (e) => {
+  const edit = e.target.closest("[data-edit]");
+  if (edit) { openStaffModal(staffCache.find(s => s.id === edit.dataset.edit)); return; }
+  const mark = e.target.closest("[data-mark]");
+  if (mark) {
+    const [staffId, status] = mark.dataset.mark.split("|");
+    // tapping the active status again clears it (back to "not marked")
+    markAttendance(staffId, todayStr(), statusForStaffToday(staffId) === status ? "none" : status);
+    return;
+  }
+  const cal = e.target.closest("[data-cal]");
+  if (cal) { openAttendanceCalendar(cal.dataset.cal); return; }
+  const act = e.target.closest("[data-act]");
+  if (act && act.dataset.act === "add") openStaffModal(null);
+  if (act && act.dataset.act === "clear") {
+    staffFilter = { q: "", role: "", status: "all" };
+    $("staffSearchInput").value = "";
+    renderStaffGrid();
+  }
+});
+$("staffFilterChips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-chip]");
+  if (!b) return;
+  staffFilter.status = b.dataset.chip;
+  renderStaffGrid();
+});
+$("staffSearchInput").addEventListener("input", (e) => { staffFilter.q = e.target.value; renderStaffGrid(); });
+$("staffRoleFilter").addEventListener("change", (e) => { staffFilter.role = e.target.value; renderStaffGrid(); });
+$("staffRoster").addEventListener("click", async (e) => {
+  if (!e.target.closest("#staffMarkAllBtn")) return;
+  const today = todayStr();
+  const pending = staffCache.filter(s => statusForStaffToday(s.id) === "none");
+  if (!pending.length) return;
+  const ok = await showConfirm(`This marks ${pending.length} unmarked team member${pending.length === 1 ? "" : "s"} as present for today. You can still change anyone afterwards.`, { title: "Mark everyone present?", okLabel: "Mark present" });
+  if (!ok) return;
+  await Promise.all(pending.map(s => setDoc(doc(db, "restaurants", restoId, "attendance", `${s.id}_${today}`), { staffId: s.id, date: today, status: "present", markedAt: serverTimestamp() }, { merge: true })));
+  toast(`${pending.length} marked present`);
+});
 
 async function markAttendance(staffId, dateStr, status) {
   await setDoc(doc(db, "restaurants", restoId, "attendance", `${staffId}_${dateStr}`), {
     staffId, date: dateStr, status, markedAt: serverTimestamp()
   }, { merge: true });
-  toast("Attendance updated");
+  toast(status === "none" ? "Attendance cleared" : "Attendance updated");
   if (calendarStaffId === staffId) renderAttendanceCalendar();
 }
 
@@ -2601,11 +3003,13 @@ function openStaffModal(staff) {
   $("stfName").value = staff?.name || "";
   $("stfRole").value = staff?.role || "";
   $("stfPhone").value = staff?.phone || "";
-  $("stfSalary").value = staff?.salary || 0;
   $("stfJoinDate").value = staff?.joinDate || "";
+  $("stfShiftStart").value = staff?.shiftStart || "";
+  $("stfShiftEnd").value = staff?.shiftEnd || "";
   $("stfNotes").value = staff?.notes || "";
   $("deleteStaffBtn").style.display = staff ? "block" : "none";
   $("staffModal").classList.remove("hidden");
+  setTimeout(() => { try { $("stfName").focus(); } catch (e) { /* hidden */ } }, 50);
 }
 $("addStaffBtn").onclick = () => openStaffModal(null);
 $("staffModalClose").onclick = () => $("staffModal").classList.add("hidden");
@@ -2617,8 +3021,9 @@ $("saveStaffBtn").onclick = async () => {
     name,
     role: $("stfRole").value.trim(),
     phone: $("stfPhone").value.trim(),
-    salary: Math.max(0, parseFloat($("stfSalary").value) || 0),
     joinDate: $("stfJoinDate").value || "",
+    shiftStart: $("stfShiftStart").value || "",
+    shiftEnd: $("stfShiftEnd").value || "",
     notes: $("stfNotes").value.trim(),
   };
   if (editingStaffId) {
@@ -2686,19 +3091,18 @@ async function renderAttendanceCalendar() {
   $("attCalGrid").querySelectorAll("[data-date]").forEach(cell => {
     cell.onclick = async () => {
       const ds = cell.dataset.date;
-      const attRef2 = collection(db, "restaurants", restoId, "attendance");
-      const existing = await getDocs(query(attRef2, where("staffId", "==", calendarStaffId), where("date", "==", ds)));
-      const curr = existing.empty ? "none" : existing.docs[0].data().status;
+      const curr = byDate[ds] || "none";
       const next = ATT_CYCLE[(ATT_CYCLE.indexOf(curr) + 1) % ATT_CYCLE.length];
+      byDate[ds] = next;
       await markAttendance(calendarStaffId, ds, next);
     };
   });
 
   $("attCalSummary").innerHTML = `
-    <span>✅ ${counts.present} present</span>
-    <span>🌗 ${counts.halfday} half-day</span>
-    <span>🌴 ${counts.leave} leave</span>
-    <span>❌ ${counts.absent} absent</span>`;
+    <span><b>${counts.present}</b>Present</span>
+    <span><b>${counts.halfday}</b>Half-day</span>
+    <span><b>${counts.leave}</b>Leave</span>
+    <span><b>${counts.absent}</b>Absent</span>`;
 }
 
 // ===================== SALES SUMMARY (profit/loss overview, payment split, top sellers) =====================

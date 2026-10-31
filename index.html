@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="dashboard.css">
 <link rel="stylesheet" href="pos-redesign.css">
+<link rel="stylesheet" href="staff-qr.css">
 </head>
 <body>
 
@@ -470,27 +471,64 @@
 
     <!-- QR TABLE ORDERING -->
     <section id="view-qrorder" class="view">
-      <header class="view-header">
-        <div><div class="eyebrow">Self-service</div><h1>QR Table Ordering</h1><p class="view-sub">Let guests order from their table with a QR code.</p></div>
-        <div class="view-header-actions">
+      <header class="qx-head">
+        <div>
+          <h1>QR ordering</h1>
+          <p>Guests scan the code on their table, order and call a waiter. Every request lands here until you handle it.</p>
+        </div>
+        <div class="qx-head-actions">
           <button class="btn-ghost" id="waiterLangToggle" title="Switch waiter-call language">🌐 हिंदी</button>
-          <label class="kds-sound-toggle"><input type="checkbox" id="qrOrderingEnabledToggle"> Enable customer ordering</label>
+          <label class="qx-switch">
+            <input type="checkbox" id="qrOrderingEnabledToggle">
+            <span class="qx-switch-track"><i></i></span>
+            <span class="qx-switch-text"><b id="qrSwitchState">Ordering is off</b><small>Customer ordering</small></span>
+          </label>
         </div>
       </header>
-      <div class="panel" id="qrTableRequestsPanel">
-        <div class="panel-head panel-head-row"><h2>🔔 Waiter calls</h2><span class="mb-count" id="qrTableRequestsCount"></span></div>
-        <p class="qr-help-text">Customers can tap "Call waiter" anytime from their ordering screen. Requests show up here by table and floor until you mark them resolved.</p>
-        <div id="qrTableRequestsList" class="list"></div>
+
+      <div class="qx-stats">
+        <div class="qx-stat" id="qxStatCalls"><span class="qx-stat-ico"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 21h4"/></svg></span><div><b id="qxCallsNum">0</b><span>Waiter calls waiting</span></div></div>
+        <div class="qx-stat" id="qxStatOrders"><span class="qx-stat-ico"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-7h11L20 13"/><path d="M4 13v6h16v-6h-5l-1 2h-4l-1-2H4z"/></svg></span><div><b id="qxOrdersNum">0</b><span>Orders to approve</span></div></div>
+        <div class="qx-stat" id="qxStatTables"><span class="qx-stat-ico"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h3v3h-3zM19 19h1M17 20v0"/></svg></span><div><b id="qxTablesNum">0</b><span>Tables with a QR code</span></div></div>
+        <div class="qx-stat" id="qxStatState"><span class="qx-stat-ico"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><b id="qxStateNum">Off</b><span>Customer ordering</span></div></div>
       </div>
-      <div class="panel" id="qrIncomingPanel">
-        <div class="panel-head panel-head-row"><h2>📥 Incoming customer orders</h2><span class="mb-count" id="qrIncomingCount"></span></div>
-        <div id="qrIncomingList" class="list"></div>
+
+      <div class="qx-flow" aria-label="How QR ordering works">
+        <div class="qx-step"><span class="qx-step-n">1</span><div><b>Guest scans</b><small>Opens your live menu</small></div></div>
+        <span class="qx-flow-line"></span>
+        <div class="qx-step"><span class="qx-step-n">2</span><div><b>Guest orders</b><small>Or taps Call waiter</small></div></div>
+        <span class="qx-flow-line"></span>
+        <div class="qx-step"><span class="qx-step-n">3</span><div><b>You approve</b><small>Devices ring until you do</small></div></div>
+        <span class="qx-flow-line"></span>
+        <div class="qx-step"><span class="qx-step-n">4</span><div><b>Kitchen cooks</b><small>Ticket appears on Kitchen</small></div></div>
       </div>
-      <div class="panel">
-        <div class="panel-head"><h2>Table QR codes</h2></div>
-        <p class="qr-help-text">Print and place these on each table. Customers scan, browse your live menu, and send orders straight to this dashboard for approval.</p>
-        <div id="qrTableGrid" class="qr-table-grid"></div>
+
+      <div class="qx-desk">
+        <section class="qx-card" id="qrIncomingPanel">
+          <div class="qx-card-head"><h2><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13l2.5-7h11L20 13"/><path d="M4 13v6h16v-6h-5l-1 2h-4l-1-2H4z"/></svg>Orders to approve</h2><span class="qx-badge" id="qrIncomingCount"></span></div>
+          <div id="qrIncomingList" class="qx-list"></div>
+        </section>
+        <section class="qx-card" id="qrTableRequestsPanel">
+          <div class="qx-card-head"><h2><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 21h4"/></svg>Waiter calls</h2><span class="qx-badge" id="qrTableRequestsCount"></span></div>
+          <p class="qx-sub">Guests tap “Call waiter” on their screen. The call stays here until you mark it resolved.</p>
+          <div id="qrTableRequestsList" class="qx-list"></div>
+        </section>
       </div>
+
+      <section class="qx-card qx-qrs">
+        <div class="qx-card-head">
+          <div>
+            <h2><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h3v3h-3zM19 19h1"/></svg>Table QR codes</h2>
+            <p class="qx-sub" style="margin:6px 0 0">Print one for every table. Guests scan it, browse your live menu and send orders here for approval.</p>
+          </div>
+          <div class="qx-qr-tools">
+            <label class="qx-qr-search"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input type="search" id="qrTableSearch" placeholder="Find a table" autocomplete="off" aria-label="Find a table"></label>
+            <button class="btn-ghost" id="qrDownloadAllBtn" type="button"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>Download all</button>
+            <button class="btn-primary" id="qrPrintAllBtn" type="button"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/></svg>Print all</button>
+          </div>
+        </div>
+        <div id="qrTableGrid" class="qx-qr-grid"></div>
+      </section>
     </section>
 
     <!-- BILL HISTORY -->
@@ -516,15 +554,15 @@
     </section>
 
 
-    <!-- STAFF MANAGEMENT (locked) -->
+    <!-- STAFF -->
     <section id="view-staff" class="view">
 
-      <!-- LOCK SCREEN -->
+      <!-- LOCK SCREEN (unlocks once; stays open until you press Lock now or sign out) -->
       <div id="staffLockScreen" class="staff-lock-screen">
         <div class="staff-lock-card">
           <div class="staff-lock-ico">🔒</div>
           <h2 id="staffLockTitle">Staff area is locked</h2>
-          <p id="staffLockSub" class="staff-lock-sub">Enter the owner's staff password to view staff, attendance and leave records.</p>
+          <p id="staffLockSub" class="staff-lock-sub">Enter the owner's staff password to view staff and attendance.</p>
           <input type="password" id="staffLockInput" placeholder="Password" autocomplete="off">
           <div id="staffLockConfirmWrap" class="hidden">
             <input type="password" id="staffLockConfirmInput" placeholder="Confirm password" autocomplete="off">
@@ -536,44 +574,27 @@
 
       <!-- UNLOCKED CONTENT -->
       <div id="staffContent" class="hidden">
-        <header class="view-header">
-          <div><div class="eyebrow">Team</div><h1>Staff Management</h1><p class="view-sub">Manage your team, attendance and payroll.</p></div>
-          <div style="display:flex;gap:8px;">
-            <button class="btn-ghost" id="staffChangePassBtn">🔑 Change password</button>
-            <button class="btn-ghost" id="staffLockNowBtn">🔒 Lock now</button>
-            <button class="btn-primary" id="addStaffBtn">+ Add staff</button>
+        <header class="sf-head">
+          <div>
+            <h1>Staff</h1>
+            <p id="staffSubline">Your team and today's attendance.</p>
+          </div>
+          <div class="sf-head-actions">
+            <button class="btn-ghost" id="staffChangePassBtn" type="button"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Change password</button>
+            <button class="btn-ghost" id="staffLockNowBtn" type="button"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M12 15v2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg>Lock now</button>
+            <button class="btn-primary" id="addStaffBtn" type="button"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add staff</button>
           </div>
         </header>
 
-        <div class="stat-grid">
-          <div class="stat-card"><div class="stat-label">Total staff</div><div class="stat-value" id="staffStatTotal">0</div></div>
-          <div class="stat-card"><div class="stat-label">Present today</div><div class="stat-value" id="staffStatPresent">0</div></div>
-          <div class="stat-card"><div class="stat-label">On leave today</div><div class="stat-value" id="staffStatLeave">0</div></div>
-          <div class="stat-card"><div class="stat-label">Absent today</div><div class="stat-value" id="staffStatAbsent">0</div></div>
+        <section class="sf-roster" id="staffRoster" aria-live="polite"></section>
+
+        <div class="sf-tools">
+          <label class="sf-search"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input type="search" id="staffSearchInput" placeholder="Search name, role or phone" autocomplete="off" aria-label="Search staff"></label>
+          <select id="staffRoleFilter" class="sf-role-select" aria-label="Filter by role"><option value="">All roles</option></select>
+          <div id="staffFilterChips" class="sf-chips" role="group" aria-label="Filter by today's status"></div>
         </div>
 
-        <div id="staffGrid" class="staff-grid"></div>
-
-        <!-- PAYROLL & TIP POOL -->
-        <div class="payroll-card">
-          <div class="payroll-head">
-            <div><div class="eyebrow">Money</div><h2>💰 Payroll &amp; tip pool</h2>
-              <p>Auto-calculated from this month's attendance. Salary is treated as a monthly figure and split into a per-day rate (÷30).</p>
-            </div>
-            <input type="month" id="payrollMonthInput">
-          </div>
-          <label class="payroll-tip-input">Total tips collected this month (₹)
-            <input type="number" id="payrollTipPool" min="0" step="1" placeholder="0">
-          </label>
-          <p class="payroll-tip-hint">Tips are split across staff in proportion to days worked that month (a half-day counts as 0.5).</p>
-          <div class="payroll-table-wrap">
-            <table class="payroll-table">
-              <thead><tr><th>Staff</th><th>Present</th><th>Half-day</th><th>Leave/Absent</th><th>Base pay</th><th>Tip share</th><th>Total payable</th></tr></thead>
-              <tbody id="payrollTableBody"></tbody>
-              <tfoot><tr><td colspan="4">Total</td><td id="payrollTotalBase">₹0</td><td id="payrollTotalTip">₹0</td><td id="payrollTotalPayable">₹0</td></tr></tfoot>
-            </table>
-          </div>
-        </div>
+        <div id="staffGrid" class="sf-grid"></div>
       </div>
     </section>
 
@@ -867,17 +888,21 @@
 <!-- ============ STAFF MODAL ============ -->
 <div id="staffModal" class="modal hidden">
   <div class="modal-card">
-    <div class="modal-head"><h2 id="staffModalTitle">Add staff member</h2><button class="modal-x" id="staffModalClose">×</button></div>
-    <label>Full name <input type="text" id="stfName" placeholder="Ramesh Kumar"></label>
+    <div class="modal-head"><h2 id="staffModalTitle">Add staff member</h2><button class="modal-x" id="staffModalClose" aria-label="Close">×</button></div>
+    <div class="sf-modal-group">Who they are</div>
+    <label>Full name <input type="text" id="stfName" placeholder="Ramesh Kumar" autocomplete="off"></label>
     <div class="two-col">
-      <label>Role <input type="text" id="stfRole" placeholder="Waiter / Chef / Cashier"></label>
-      <label>Phone <input type="tel" id="stfPhone" placeholder="9876543210"></label>
+      <label>Role <input type="text" id="stfRole" list="stfRoleList" placeholder="Waiter, Chef, Cashier…" autocomplete="off"></label>
+      <label>Phone <input type="tel" id="stfPhone" inputmode="tel" placeholder="98765 43210"></label>
     </div>
+    <datalist id="stfRoleList"><option>Waiter</option><option>Captain</option><option>Chef</option><option>Cook</option><option>Cashier</option><option>Manager</option><option>Helper</option><option>Cleaner</option></datalist>
+    <div class="sf-modal-group">Work</div>
+    <label>Date of joining <input type="date" id="stfJoinDate"></label>
     <div class="two-col">
-      <label>Monthly salary ₹ <input type="number" id="stfSalary" value="0" step="100"></label>
-      <label>Date of joining <input type="date" id="stfJoinDate"></label>
+      <label>Shift starts <input type="time" id="stfShiftStart"></label>
+      <label>Shift ends <input type="time" id="stfShiftEnd"></label>
     </div>
-    <label>Notes (optional) <input type="text" id="stfNotes" placeholder="e.g. shift timing, ID proof"></label>
+    <label>Notes (optional) <input type="text" id="stfNotes" placeholder="e.g. weekly off, ID proof, emergency contact"></label>
     <div class="modal-actions">
       <button class="btn-ghost" id="deleteStaffBtn">Delete</button>
       <button class="btn-primary" id="saveStaffBtn">Save staff member</button>
@@ -895,6 +920,8 @@
       <span class="att-cal-month" id="attCalMonthLabel">—</span>
       <button class="btn-mini" id="attCalNextBtn">→</button>
     </div>
+
+    <p class="att-cal-hint">Tap a day to change it: present, half-day, leave, absent, cleared.</p>
 
     <div class="att-cal-legend">
       <span><span class="att-dot present"></span>Present</span>
@@ -1032,6 +1059,16 @@
     <p class="tr-modal-msg">Guests at <strong id="trTableName">—</strong> need additional seating for a large group. Please go assist them.</p>
     <button id="trOkBtn" class="tr-ok-btn">OK, I'll go assist</button>
   </div>
+</div>
+
+<!-- ============ LIVE ALERT BAR ============
+     Shown while anything needs attention (waiter call, QR order waiting for
+     approval, new kitchen ticket). This device keeps ringing until each one
+     is handled. -->
+<div id="alertBar" class="al-bar hidden" role="alert" aria-live="assertive">
+  <span class="al-ico"><svg class="sq-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 21h4"/></svg></span>
+  <div id="alertItems" class="al-items"></div>
+  <button id="alertMuteBtn" class="al-mute" type="button">Mute 1 min</button>
 </div>
 
 <div id="toast" class="toast hidden"></div>
