@@ -6,11 +6,12 @@
 <title>Order — Table</title>
 <link rel="icon" type="image/png" href="img/icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Sora:wght@600;700;800&family=Noto+Sans+Devanagari:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="order.css">
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="order-hero.css">
 <link rel="stylesheet" href="order-nav.css">
+<link rel="stylesheet" href="order-checkout.css">
 </head>
 <body>
 
@@ -130,7 +131,86 @@
   <div id="trackNotice" class="ord-trk-notice hidden"></div>
   <div id="trackList" class="ord-trk-list"></div>
   <div class="ord-trk-actions">
+    <div class="ord-co-note" role="note">
+      <span class="ord-co-note-ico" aria-hidden="true">!</span>
+      <p>
+        <span class="ord-co-en">Tap <b>Checkout</b> only when you don't want to order anything more. Once you checkout, this dine-in session will end.</span>
+        <span class="ord-co-hi" lang="hi">चेकआउट तभी दबाएँ जब आपको और कुछ ऑर्डर नहीं करना हो। चेकआउट करते ही यह डाइन-इन सेशन समाप्त हो जाएगा।</span>
+      </p>
+    </div>
     <button id="orderAgainBtn" class="ord-place-btn">+ Order more</button>
+    <button id="checkoutBtn" class="ord-co-btn" type="button" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>
+      Checkout <span class="hi" lang="hi">· चेकआउट</span>
+    </button>
+  </div>
+</div>
+
+<!-- Checkout confirmation -->
+<div id="coOverlay" class="ord-overlay hidden"></div>
+<div id="coSheet" class="ord-item-sheet ord-co-sheet hidden" role="alertdialog" aria-modal="true" aria-labelledby="coTitle">
+  <div class="ord-co-sheet-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.6v.1"/></svg></div>
+  <h2 id="coTitle">End this session and checkout?</h2>
+  <p class="ord-co-title-hi" lang="hi">सेशन समाप्त करके चेकआउट करें?</p>
+  <div class="ord-co-sum">
+    <div><small id="coSumLbl">Your bill so far</small></div>
+    <b id="coSumAmt">₹0.00</b>
+  </div>
+  <div id="coPending" class="ord-co-pending hidden">
+    Some of your orders are still on their way — they will still be served.
+    <span class="hi" lang="hi">आपके कुछ ऑर्डर अभी रास्ते में हैं — वे आपको परोसे जाएँगे।</span>
+  </div>
+  <div class="ord-co-warn">
+    <b>You won't be able to order anything more after this.</b>
+    <span class="hi" lang="hi">इसके बाद आप और कुछ ऑर्डर नहीं कर पाएँगे।</span>
+  </div>
+  <div class="ord-co-actions">
+    <button id="coConfirmBtn" class="ord-co-yes" type="button">Yes, checkout <span class="hi" lang="hi">हाँ, चेकआउट करें</span></button>
+    <button id="coCancelBtn" class="ord-co-no" type="button">Not yet, go back <span class="hi" lang="hi">अभी नहीं, वापस जाएँ</span></button>
+  </div>
+</div>
+
+<!-- Final bill (session ended) -->
+<div id="billScreen" class="ord-bill hidden">
+  <div class="ord-trk-top">
+    <div id="billRestoName" class="ord-trk-resto">—</div>
+    <div class="ord-trk-pill">Table <span id="billTableLabel">—</span></div>
+  </div>
+  <section class="ord-bill-hero">
+    <div class="ord-bill-check"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1>Checkout complete</h1>
+    <p class="ord-bill-hero-hi" lang="hi">चेकआउट पूरा हुआ</p>
+    <div class="ord-bill-amt-wrap">
+      <div class="ord-bill-amt-lbl">Amount to pay <span class="hi" lang="hi">· भुगतान की राशि</span></div>
+      <div id="billAmount" class="ord-bill-amt">₹0.00</div>
+    </div>
+  </section>
+  <section class="ord-pay-card" aria-label="How to pay">
+    <div class="ord-pay-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M3 10h18"/><path d="M7 15h3"/></svg></div>
+    <div class="ord-pay-txt">
+      <b>Please pay at the Cafe Reception</b>
+      <span class="ord-pay-hi" lang="hi">कृपया भुगतान कैफ़े रिसेप्शन पर करें</span>
+      <small>Show this screen to our cashier.<span class="hi" lang="hi">यह स्क्रीन कैशियर को दिखाएँ।</span></small>
+    </div>
+  </section>
+  <div class="ord-receipt-wrap">
+    <section class="ord-receipt" aria-label="Bill summary">
+      <div class="ord-receipt-title"><span>Bill summary</span><span class="hi" lang="hi">बिल विवरण</span></div>
+      <div class="ord-receipt-meta">
+        <div><small>Name</small><b id="billName">—</b></div>
+        <div><small>Table</small><b id="billTableSeats">—</b></div>
+        <div><small>Date</small><b id="billWhen">—</b></div>
+        <div><small>Bill ref</small><b id="billRef">—</b></div>
+      </div>
+      <ul id="billLines" class="ord-receipt-lines"></ul>
+      <div class="ord-receipt-total"><span>Total<span class="hi" lang="hi">कुल</span></span><span id="billTotal">₹0.00</span></div>
+      <p class="ord-receipt-note">Taxes and charges, if any, are added in the final bill at the counter.<span class="hi" lang="hi">लागू कर और शुल्क, यदि कोई हों, काउंटर पर अंतिम बिल में जोड़े जाएँगे।</span></p>
+    </section>
+  </div>
+  <div class="ord-bill-foot">
+    <b>Thank you for dining with us!</b>
+    <span class="hi" lang="hi">हमारे साथ भोजन करने के लिए धन्यवाद!</span>
+    <span class="ord-bill-ended">This dine-in session has ended · <span class="hi" lang="hi">यह सेशन समाप्त हो चुका है</span></span>
   </div>
 </div>
 

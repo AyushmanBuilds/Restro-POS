@@ -1,0 +1,107 @@
+/* ===== Checkout: bilingual notice, Checkout button, confirm sheet and final bill screen =====
+   Load AFTER order.css, premium.css, order-hero.css and order-nav.css. Additive only. */
+
+/* Hindi text uses a proper Devanagari face so it never falls back to a clunky system font */
+.hi,[lang="hi"]{font-family:'Noto Sans Devanagari','Inter',-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.5;}
+
+/* ---------- Tracker: bottom action bar (notice + Order more + Checkout) ---------- */
+.ord-track{padding-bottom:calc(268px + env(safe-area-inset-bottom));}
+.ord-trk-actions{display:flex;flex-direction:column;gap:8px;}
+.ord-trk-actions > *{width:100%;max-width:520px;margin-inline:auto;}
+
+.ord-co-note{display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:12px;background:#FFF4DB;border:1px solid #F0D58B;color:#5E4500;}
+.ord-co-note-ico{flex:0 0 20px;height:20px;margin-top:1px;border-radius:50%;background:#C98A00;color:#fff;font:800 12px/20px var(--font-display);text-align:center;}
+.ord-co-note p{margin:0;font-size:11.5px;line-height:1.4;}
+.ord-co-note p b{font-weight:800;}
+.ord-co-note .ord-co-hi{display:block;margin-top:3px;font-size:12px;font-weight:600;line-height:1.5;}
+
+.ord-co-btn{display:flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 16px;border-radius:14px;
+  background:var(--surface);color:var(--ink);border:1.5px solid var(--ink);font:800 14.5px var(--font-body);cursor:pointer;
+  transition:background .15s,transform .12s;}
+.ord-co-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+.ord-co-btn .hi{font-weight:700;font-size:14px;opacity:.85;}
+.ord-co-btn:active{transform:scale(.98);background:var(--surface-2);}
+.ord-co-btn:disabled{opacity:.45;cursor:not-allowed;}
+.ord-co-btn:focus-visible,.ord-co-yes:focus-visible,.ord-co-no:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+
+/* ---------- Confirm sheet ---------- */
+#coOverlay{z-index:30;}
+.ord-co-sheet{z-index:31;text-align:center;padding:24px 22px calc(22px + env(safe-area-inset-bottom));}
+.ord-co-sheet-ico{width:56px;height:56px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:#FFF1D6;color:#8A5A00;}
+.ord-co-sheet-ico svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.ord-co-sheet h2{font-size:20px;font-weight:700;line-height:1.2;}
+.ord-co-sheet .ord-co-title-hi{margin:4px 0 0;font-size:16px;font-weight:700;color:var(--ink-soft);}
+.ord-co-sum{display:flex;justify-content:space-between;align-items:center;margin:16px 0 12px;padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);text-align:left;}
+.ord-co-sum small{display:block;font-size:12px;font-weight:600;color:var(--muted);}
+.ord-co-sum b{font-family:var(--font-display);font-size:19px;font-weight:800;color:var(--primary-deep);font-variant-numeric:tabular-nums;}
+.ord-co-warn{margin:0 0 10px;padding:12px 13px;border-radius:12px;background:#FDF1EE;border:1px solid #F3C9BF;color:#8C2A18;text-align:left;font-size:13px;line-height:1.45;}
+.ord-co-warn b{font-weight:800;}
+.ord-co-warn .hi{display:block;margin-top:3px;font-weight:600;}
+.ord-co-pending{margin:0 0 10px;padding:10px 13px;border-radius:12px;background:var(--teal-tint);color:#0A5655;text-align:left;font-size:12.5px;line-height:1.45;}
+.ord-co-pending .hi{display:block;margin-top:2px;font-weight:600;}
+.ord-co-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.ord-co-yes,.ord-co-no{width:100%;border-radius:14px;padding:12px 16px;cursor:pointer;font-family:var(--font-body);display:flex;flex-direction:column;align-items:center;gap:1px;}
+.ord-co-yes{background:var(--ink);color:#fff;border:0;font-weight:800;font-size:15px;box-shadow:0 10px 24px rgba(22,26,35,.25);}
+.ord-co-no{background:var(--surface);color:var(--ink);border:1.5px solid var(--line);font-weight:700;font-size:14.5px;}
+.ord-co-yes .hi,.ord-co-no .hi{font-size:13px;font-weight:600;opacity:.85;}
+.ord-co-yes:disabled{opacity:.6;}
+.ord-co-yes:active,.ord-co-no:active{transform:scale(.98);}
+
+/* ---------- Final bill screen ---------- */
+.ord-bill{min-height:100vh;min-height:100dvh;background:var(--paper);padding-bottom:calc(32px + env(safe-area-inset-bottom));}
+.ord-bill.hidden{display:none !important;}
+@media (min-width:600px){.ord-bill{max-width:560px;margin:0 auto;}}
+
+.ord-bill-hero{margin:16px 16px 0;padding:24px 20px 22px;border-radius:22px;text-align:center;color:#fff;background:var(--primary-grad);box-shadow:0 14px 30px rgba(15,61,48,.22);}
+.ord-bill-check{width:46px;height:46px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.4);}
+.ord-bill-check svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
+.ord-bill-hero h1{font-size:20px;font-weight:600;}
+.ord-bill-hero .ord-bill-hero-hi{margin:2px 0 0;font-size:14px;font-weight:600;opacity:.88;}
+.ord-bill-amt-wrap{margin-top:18px;padding-top:16px;border-top:1px dashed rgba(255,255,255,.3);}
+.ord-bill-amt-lbl{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.78;}
+.ord-bill-amt-lbl .hi{text-transform:none;letter-spacing:0;}
+.ord-bill-amt{margin-top:4px;font-family:var(--font-display);font-weight:800;font-size:42px;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+
+.ord-pay-card{display:flex;gap:14px;align-items:flex-start;margin:14px 16px 0;padding:16px;border-radius:18px;background:var(--surface);border:1.5px solid var(--primary);box-shadow:0 8px 20px rgba(27,94,74,.1);}
+.ord-pay-ico{flex:0 0 46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--primary-tint);color:var(--primary-deep);}
+.ord-pay-ico svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.ord-pay-txt{min-width:0;}
+.ord-pay-txt b{display:block;font-family:var(--font-display);font-size:16px;font-weight:700;line-height:1.25;}
+.ord-pay-txt .ord-pay-hi{display:block;margin-top:2px;font-size:14.5px;font-weight:700;color:var(--primary-deep);}
+.ord-pay-txt small{display:block;margin-top:8px;font-size:12.5px;line-height:1.45;color:var(--muted);}
+.ord-pay-txt small .hi{display:block;}
+
+.ord-receipt-wrap{margin:14px 16px 0;filter:drop-shadow(0 4px 12px rgba(20,20,30,.08));}
+.ord-receipt{background:var(--surface);border-radius:18px 18px 0 0;padding:18px 18px 26px;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/16px 100%;
+          mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/16px 100%;}
+.ord-receipt-title{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-family:var(--font-display);font-weight:700;font-size:15px;}
+.ord-receipt-title .hi{font-family:'Noto Sans Devanagari',var(--font-body);font-size:13px;font-weight:600;color:var(--muted);}
+.ord-receipt-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:14px 0 4px;padding:12px 0;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);}
+.ord-receipt-meta div{min-width:0;}
+.ord-receipt-meta small{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+.ord-receipt-meta b{display:block;margin-top:2px;font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ord-receipt-lines{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.ord-receipt-lines li{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:start;font-size:13.5px;}
+.ord-receipt-lines .q{font-weight:800;color:var(--primary-deep);font-variant-numeric:tabular-nums;}
+.ord-receipt-lines .n{min-width:0;font-weight:600;color:var(--ink);}
+.ord-receipt-lines .n small{display:block;margin-top:1px;font-size:11.5px;font-weight:500;color:var(--muted);}
+.ord-receipt-lines .a{font-weight:700;font-variant-numeric:tabular-nums;}
+.ord-receipt-empty{margin:12px 0 0;font-size:13px;line-height:1.5;color:var(--muted);text-align:center;}
+.ord-receipt-total{display:flex;justify-content:space-between;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1.5px solid var(--ink);font-family:var(--font-display);font-weight:800;font-size:18px;}
+.ord-receipt-total .hi{font-family:'Noto Sans Devanagari',var(--font-body);font-size:13px;font-weight:600;color:var(--muted);margin-left:6px;}
+.ord-receipt-total span:last-child{font-variant-numeric:tabular-nums;}
+.ord-receipt-note{margin:10px 0 0;font-size:11.5px;line-height:1.45;color:var(--muted);}
+.ord-receipt-note .hi{display:block;}
+
+.ord-bill-foot{margin:18px 24px 0;text-align:center;font-size:13px;line-height:1.5;color:var(--ink-soft);}
+.ord-bill-foot b{display:block;font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--ink);}
+.ord-bill-foot .hi{display:block;}
+.ord-bill-ended{display:inline-block;margin-top:10px;padding:5px 12px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--muted);}
+
+@media (max-width:359px){
+  .ord-bill-amt{font-size:36px;}
+  .ord-co-note p{font-size:11px;}
+  .ord-pay-card{gap:10px;padding:14px;}
+}
+@media (prefers-reduced-motion:reduce){.ord-co-btn,.ord-co-yes,.ord-co-no{transition:none;}}

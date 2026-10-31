@@ -66,8 +66,10 @@ let selectedSeats = [];
 let tableFloor = ""; // this table's floor, looked up at init — sent along with waiter calls
 
 // ===================== SCREEN MANAGER =====================
-const ALL_SCREENS = ["loadingScreen","disabledScreen","errorScreen","seatScreen","app","trackScreen"];
+const ALL_SCREENS = ["loadingScreen","disabledScreen","errorScreen","seatScreen","app","trackScreen","billScreen"];
 function show(id) {
+  // once the session is checked out, the bill is the only screen that can ever be shown
+  if (typeof sessionEnded !== "undefined" && sessionEnded) id = "billScreen";
   ALL_SCREENS.forEach(s => $(s).classList.add("hidden"));
   $(id).classList.remove("hidden");
 }
@@ -79,6 +81,15 @@ function fail(msg) {
 // ===================== INIT =====================
 async function init() {
   if (!restoId || !tableName) { fail("This QR code link looks invalid. Please ask staff for help."); return; }
+  // this table's session was already checked out from this phone -> straight back to the bill, no ordering
+  const doneCheckout = loadCheckout();
+  if (doneCheckout) {
+    sessionEnded = true;
+    renderBill(doneCheckout);
+    lockBackButton();
+    show("billScreen");
+    return;
+  }
   try {
     // Reads from restaurants/{restoId}/public/info — a deliberately small,
     // publicly-readable doc — rather than the restaurant's main doc, which
@@ -610,7 +621,7 @@ $("cartOverlay").onclick = () => { $("cartDrawer").classList.add("hidden"); $("c
 
 // ===================== PLACE ORDER =====================
 $("placeOrderBtn").onclick = async () => {
-  if (!cart.length) return;
+  if (sessionEnded || !cart.length) return;
   const custName = $("custNameInput").value.trim();
   if (!custName) {
     alert("Please enter your name before sending the order — it helps staff find you at the table.");
@@ -639,10 +650,14 @@ $("placeOrderBtn").onclick = async () => {
       status: "pending",
       createdAt: serverTimestamp()
     });
+    const placedSnap = {
+      customerName: custName, seatLabels: [...selectedSeats].sort(), total: cartTotal(),
+      items: cart.map(c => ({ name: c.name, variant: c.variant, qty: c.qty, price: c.unitPrice, addons: c.addons.map(a => a.name) }))
+    };
     cart = [];
     $("cartDrawer").classList.add("hidden");
     $("cartOverlay").classList.add("hidden");
-    trackOrder(placedRef.id);
+    trackOrder(placedRef.id, placedSnap);
     show("trackScreen");
     window.scrollTo(0, 0);
   } catch (e) {
@@ -690,9 +705,9 @@ function trackStage(o) {
   return k === "preparing" ? 1 : k === "ready" ? 2 : 0;
 }
 
-function trackOrder(id) {
+function trackOrder(id, snap) {
   const arr = loadTracked();
-  if (!arr.some(x => x.id === id)) { arr.push({ id, t: Date.now() }); saveTracked(arr); }
+  if (!arr.some(x => x.id === id)) { arr.push(snap ? { id, t: Date.now(), snap } : { id, t: Date.now() }); saveTracked(arr); }
   subscribeTracked(id);
 }
 function untrack(id) {
@@ -744,6 +759,7 @@ function renderTracker() {
   $("trackNotice").classList.toggle("hidden", !(trackFailed && !order.length));
   $("trackNotice").textContent = "Live status isn't available right now, but your order has been sent. Please ask a staff member for an update." + (trackErrCode ? " [" + trackErrCode + "]" : "");
   refreshTrackBtn();
+  refreshCheckoutBtn();
 
   if (!order.length) {
     list.innerHTML = "";
@@ -800,8 +816,143 @@ function refreshTrackBtn() {
 if ($("trackOrderBtn")) $("trackOrderBtn").onclick = () => { renderTracker(); show("trackScreen"); window.scrollTo(0, 0); };
 
 $("orderAgainBtn").onclick = () => {
+  if (sessionEnded) { show("billScreen"); return; }
   if (selectedSeats.length) { refreshCartUI(); renderMenu(); show("app"); }
   else showSeatScreen(tableSeatCount);   // page was reloaded — seats need picking again
 };
+
+// ===================== CHECKOUT — END THE DINE-IN SESSION =====================
+// "Checkout" freezes everything the customer has ordered into a bill, ends the
+// session for this phone + table and shows the "pay at the Cafe Reception" screen.
+// The ended state is saved in localStorage, so reloading, re-scanning the QR or
+// pressing Back can never reopen the menu. (A fresh session is possible again
+// after CHECKOUT_TTL, or once the browser data is cleared.)
+const CHECKOUT_KEY = `zs_checkout_${restoId}_${tableName}`;
+const CHECKOUT_TTL = 6 * 3600 * 1000;
+let sessionEnded = false;
+let backLocked = false;
+
+function loadCheckout() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CHECKOUT_KEY) || "null");
+    return c && c.t && Date.now() - c.t < CHECKOUT_TTL ? c : null;
+  } catch (e) { return null; }
+}
+
+// Everything ordered in this session (rejected orders excluded), merged line by line.
+function buildBill() {
+  const lines = new Map();
+  const seats = new Set();
+  let orders = 0, pending = 0, ordersTotal = 0, name = "";
+  loadTracked().forEach(e => {
+    const o = trackData[e.id] || e.snap;
+    if (!o) return;
+    const stage = trackStage(o);
+    if (stage === -1) return;
+    orders++;
+    if (stage < 3) pending++;
+    ordersTotal += Number(o.total) || 0;
+    name = name || o.customerName || "";
+    (o.seatLabels || []).forEach(s => seats.add(String(s).toUpperCase()));
+    (o.items || []).forEach(i => {
+      const price = Number(i.price) || 0;
+      const addons = Array.isArray(i.addons) ? i.addons : [];
+      const key = [i.name, i.variant || "", addons.join(","), price].join("|");
+      const cur = lines.get(key) || { name: i.name, variant: i.variant || "", addons, price, qty: 0 };
+      cur.qty += Number(i.qty) || 0;
+      lines.set(key, cur);
+    });
+  });
+  const list = [...lines.values()];
+  const linesTotal = list.reduce((s, l) => s + l.price * l.qty, 0);
+  return { orders, pending, name, seats: [...seats].sort(), lines: list, total: list.length ? linesTotal : ordersTotal };
+}
+
+function refreshCheckoutBtn() {
+  const b = $("checkoutBtn"); if (!b) return;
+  b.disabled = sessionEnded || buildBill().orders === 0;
+}
+
+function openCheckoutSheet() {
+  if (sessionEnded) return;
+  const bill = buildBill();
+  if (!bill.orders) return;
+  $("coSumAmt").textContent = money(bill.total);
+  $("coSumLbl").textContent = `Your bill so far · ${bill.orders} order${bill.orders === 1 ? "" : "s"}`;
+  $("coPending").classList.toggle("hidden", !bill.pending);
+  $("coConfirmBtn").disabled = false;
+  $("coOverlay").classList.remove("hidden");
+  $("coSheet").classList.remove("hidden");
+}
+function closeCheckoutSheet() {
+  $("coOverlay").classList.add("hidden");
+  $("coSheet").classList.add("hidden");
+}
+
+function finishCheckout() {
+  if (sessionEnded) return;
+  const bill = buildBill();
+  const snap = {
+    t: Date.now(),
+    restoName: $("restoName").textContent || "",
+    tableName,
+    ref: "T" + String(tableName).replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 4) + "-" + Date.now().toString(36).toUpperCase().slice(-5),
+    name: bill.name, seats: bill.seats, orders: bill.orders, lines: bill.lines, total: bill.total
+  };
+  try { localStorage.setItem(CHECKOUT_KEY, JSON.stringify(snap)); } catch (e) {}
+  sessionEnded = true;
+
+  // shut down everything that could lead back to ordering
+  cart = [];
+  closeCheckoutSheet(); closeItemSheet(); closeCatSheet();
+  $("cartDrawer").classList.add("hidden"); $("cartOverlay").classList.add("hidden");
+  hideUpsellPrompt();
+  Object.keys(trackUnsubs).forEach(id => { try { trackUnsubs[id](); } catch (e) {} delete trackUnsubs[id]; });
+  try { localStorage.removeItem(TRACK_KEY); } catch (e) {}
+
+  // heads-up for staff (best effort — the bill screen works even if this fails)
+  addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
+    tableName, floor: tableFloor, seatLabels: bill.seats.map(s => s.toLowerCase()),
+    type: "checkout", note: "Checkout — guest will pay at reception",
+    status: "pending", createdAt: serverTimestamp()
+  }).catch(e => console.warn("Couldn't notify staff of checkout", e));
+
+  renderBill(snap);
+  lockBackButton();
+  show("billScreen");
+  window.scrollTo(0, 0);
+  if (navigator.vibrate) navigator.vibrate(60);
+}
+
+function renderBill(b) {
+  $("billRestoName").textContent = b.restoName || $("restoName").textContent || "Bill";
+  $("billTableLabel").textContent = b.tableName || tableName;
+  $("billAmount").textContent = money(b.total || 0);
+  $("billTotal").textContent = money(b.total || 0);
+  $("billName").textContent = b.name || "Guest";
+  $("billTableSeats").textContent = (b.tableName || tableName) + (b.seats && b.seats.length ? " · Seat" + (b.seats.length > 1 ? "s " : " ") + b.seats.join(", ") : "");
+  $("billWhen").textContent = new Date(b.t).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  $("billRef").textContent = b.ref || "—";
+  $("billLines").innerHTML = (b.lines && b.lines.length) ? b.lines.map(l => {
+    const sub = [l.variant, (l.addons && l.addons.length) ? "+ " + l.addons.join(", ") : ""].filter(Boolean).join(" · ");
+    return `<li><span class="q">${escapeHtml(l.qty)}×</span><span class="n">${escapeHtml(l.name)}${sub ? `<small>${escapeHtml(sub)}</small>` : ""}</span><span class="a">${money(l.price * l.qty)}</span></li>`;
+  }).join("") : `<li class="ord-receipt-empty" style="display:block">Your bill will be prepared at the reception.<br><span class="hi" lang="hi">आपका बिल रिसेप्शन पर तैयार किया जाएगा।</span></li>`;
+}
+
+// Back button: the bill page re-pushes itself so Back can't walk out into the menu.
+function lockBackButton() {
+  if (backLocked) return;
+  backLocked = true;
+  try {
+    history.pushState({ zsEnded: 1 }, "", location.href);
+    window.addEventListener("popstate", () => { try { history.pushState({ zsEnded: 1 }, "", location.href); } catch (e) {} });
+  } catch (e) {}
+}
+
+$("checkoutBtn").onclick = openCheckoutSheet;
+$("coCancelBtn").onclick = closeCheckoutSheet;
+$("coOverlay").onclick = closeCheckoutSheet;
+$("coConfirmBtn").onclick = () => { $("coConfirmBtn").disabled = true; finishCheckout(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeCheckoutSheet(); });
 
 init();
