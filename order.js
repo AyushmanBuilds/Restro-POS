@@ -391,25 +391,210 @@ function renderMenu() {
       addSimpleItemToCart(item);
     };
   });
+  hydrateDishPhotos();
+}
+
+// ===================== DISH PHOTOS =====================
+// Every menu card shows a photo on its right side. Photo source, in order:
+//  1. an image URL saved on the menu item (imageUrl / image / photoUrl / photo / img)
+//  2. DISH_OVERRIDES below (your own hand-picked photo for a dish name)
+//  3. automatic lookup by dish name: TheMealDB, then Wikipedia (cached on the phone)
+//  4. a styled food-icon tile, so a card is never left bare
+const DISH_OVERRIDES = {
+  // "paneer-tikka": "https://your-cdn.com/paneer-tikka.jpg",   // key = dish name in lowercase, spaces -> "-"
+};
+const DISH_LS = "ord_dishimg_v1";
+const dishImg = {};                       // key -> photo url, or "0" = none found (this visit only)
+try { Object.assign(dishImg, JSON.parse(localStorage.getItem(DISH_LS) || "{}")); } catch (e) {}
+function saveDishCache() {
+  try {
+    const out = {};
+    for (const k in dishImg) if (dishImg[k] !== "0") out[k] = dishImg[k];
+    localStorage.setItem(DISH_LS, JSON.stringify(out));
+  } catch (e) {}
+}
+function dishKey(i) {
+  return String(i.name || "").toLowerCase().replace(/[^a-z0-9\u0900-\u097f]+/g, "-").replace(/^-+|-+$/g, "") || String(i.id);
+}
+function explicitImg(i) {
+  const u = [i.imageUrl, i.image, i.photoUrl, i.photo, i.img].find(v => typeof v === "string" && /^(https:\/\/|\/\/|img\/)/i.test(v.trim()));
+  return u ? u.trim() : "";
+}
+const DISH_ICONS = [
+  [/chai|tea|kadha/, "☕"], [/coffee|latte|cappuc|espresso|mocha|americano/, "☕"],
+  [/pizza/, "🍕"], [/burger/, "🍔"], [/sandwich|toast|sub\b/, "🥪"], [/fries|chips|wedges/, "🍟"],
+  [/biryani|pulao|pulav|fried rice|rice/, "🍛"], [/noodle|chowmein|chow mein|hakka|pasta|spaghetti|macaroni|maggi/, "🍝"],
+  [/momo|dumpling|dim sum|spring roll|roll|wrap|kathi|frankie|shawarma/, "🌯"],
+  [/dosa|uttapam|idli|vada|sambar|upma/, "🥞"], [/paratha|roti|naan|kulcha|bread|puri|bhatura|chapati/, "🫓"],
+  [/paneer|dal|curry|masala|gravy|sabzi|korma|kadai|tikka|makhani|butter chicken/, "🍲"],
+  [/chicken|tandoori|kebab|kabab|wings|fish|prawn|mutton|egg|omelette/, "🍗"],
+  [/soup/, "🥣"], [/salad/, "🥗"], [/cake|pastry|brownie|donut|cookie|muffin/, "🍰"],
+  [/ice cream|sundae|kulfi|gelato|falooda/, "🍨"], [/gulab|jalebi|halwa|rasmalai|sweet|dessert|kheer/, "🍮"],
+  [/shake|smoothie|lassi|juice|mojito|soda|lemonade|cooler|mocktail|cola|water|drink|milk/, "🥤"],
+  [/samosa|pakora|pakoda|bhaji|chaat|puff|snack|kachori|pav/, "🥟"]
+];
+function dishEmoji(name) {
+  const n = String(name || "").toLowerCase();
+  for (const [re, em] of DISH_ICONS) if (re.test(n)) return em;
+  return "🍽️";
+}
+function picInner(url, name, from) {
+  return url
+    ? `<img class="ord-dish-img" src="${escapeHtml(url)}" alt="${escapeHtml(name)}" width="112" height="112" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-from="${from}">`
+    : `<span class="ord-dish-emoji" aria-hidden="true">${dishEmoji(name)}</span>`;
+}
+function dishMediaHtml(i) {
+  const key = dishKey(i);
+  const explicit = explicitImg(i);
+  const cached = dishImg[key] && dishImg[key] !== "0" ? dishImg[key] : "";
+  const url = explicit || DISH_OVERRIDES[key] || cached;
+  const from = explicit ? "item" : "auto";
+  const need = !url && dishImg[key] === undefined;
+  return `<div class="ord-dish-pic${url ? "" : " is-ph"}" data-key="${escapeHtml(key)}" data-name="${escapeHtml(i.name)}"${need ? " data-need" : ""}>${picInner(url, i.name, from)}</div>`;
+}
+
+// ---- automatic lookup ----
+const DISH_STOP = new Set(["and", "with", "in", "the", "of", "a", "an", "n", "style"]);
+const DISH_NOISE = /\b(special|spl|chef'?s?|house|signature|half|full|regular|large|small|medium|plate|portion|combo|new|classic|jumbo|mini|today'?s)\b/g;
+function dishQueries(name) {
+  let n = String(name || "").toLowerCase().replace(/\(.*?\)|\[.*?\]/g, " ").replace(/[^\p{L}\p{N}\s'-]/gu, " ").replace(DISH_NOISE, " ");
+  const withDiet = n.replace(/\s+/g, " ").trim();
+  const noDiet = n.replace(/\bnon[\s-]?veg(etarian)?\b/g, " ").replace(/\bveg(etarian|gie)?\b/g, " ").replace(/\s+/g, " ").trim();
+  return [...new Set([noDiet, withDiet].filter(Boolean))];
+}
+function dishTokens(s) {
+  return String(s || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/)
+    .filter(t => t && !DISH_STOP.has(t)).map(t => t.length > 3 ? t.replace(/(es|s)$/, "") : t);
+}
+function dishOverlap(a, b) {
+  const A = dishTokens(a), B = dishTokens(b);
+  if (!A.length || !B.length) return 0;
+  const shared = A.filter(t => B.includes(t)).length;
+  return shared / Math.min(A.length, B.length);
+}
+async function dishJson(url) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 7000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) throw new Error("http " + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+async function lookupMealDb(q) {
+  const d = await dishJson("https://www.themealdb.com/api/json/v1/1/search.php?s=" + encodeURIComponent(q));
+  const meals = (d && d.meals) || [];
+  let best = null, bestScore = 0;
+  for (const m of meals) {
+    const sc = Math.min(dishOverlap(q, m.strMeal), dishOverlap(m.strMeal, q));
+    if (sc > bestScore) { bestScore = sc; best = m; }
+  }
+  return best && bestScore >= 0.6 && best.strMealThumb ? best.strMealThumb + "/small" : "";
+}
+async function lookupWiki(q) {
+  const u = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=6"
+    + "&gsrsearch=" + encodeURIComponent(q + " food")
+    + "&prop=pageimages&piprop=thumbnail&pithumbsize=240";
+  const d = await dishJson(u);
+  const pages = Object.values((d && d.query && d.query.pages) || {}).sort((a, b) => a.index - b.index);
+  let best = null, bestScore = 0;
+  for (const p of pages) {
+    const src = p.thumbnail && p.thumbnail.source;
+    if (!src || /\.svg|flag|map|logo|icon|symbol|coat_of|diagram|portrait/i.test(src)) continue;
+    const sc = dishOverlap(q, p.title);
+    if (sc >= 0.6 && sc > bestScore) { bestScore = sc; best = src; }
+  }
+  return best || "";
+}
+async function resolveDish(name) {
+  const qs = dishQueries(name);
+  for (const q of qs) { try { const u = await lookupMealDb(q); if (u) return u; } catch (e) {} }
+  for (const q of qs) { try { const u = await lookupWiki(q); if (u) return u; } catch (e) {} }
+  return "0";
+}
+
+// ---- queue (4 at a time, visible dishes first) ----
+const dishNames = {};          // key -> display name
+const dishQueue = [];
+let dishActive = 0;
+function queueDish(key, name, front) {
+  if (dishImg[key] !== undefined && dishImg[key] !== null) return;
+  dishNames[key] = name;
+  const at = dishQueue.indexOf(key);
+  if (at >= 0) { if (!front) return; dishQueue.splice(at, 1); }
+  if (front) dishQueue.unshift(key); else dishQueue.push(key);
+  pumpDish();
+}
+function pumpDish() {
+  while (dishActive < 4 && dishQueue.length) {
+    const key = dishQueue.shift();
+    dishActive++;
+    resolveDish(dishNames[key]).then(url => applyDish(key, url)).catch(() => applyDish(key, "0"))
+      .then(() => { dishActive--; pumpDish(); });
+  }
+}
+function applyDish(key, url) {
+  dishImg[key] = url;
+  if (url !== "0") saveDishCache();
+  document.querySelectorAll(`.ord-dish-pic[data-key="${key}"]`).forEach(pic => {
+    pic.removeAttribute("data-need");
+    if (url === "0") { pic.classList.add("is-ph"); if (!pic.querySelector(".ord-dish-emoji")) pic.innerHTML = picInner("", pic.dataset.name, ""); return; }
+    if (pic.querySelector(".ord-dish-img") && pic.querySelector(".ord-dish-img").dataset.from === "item") return;
+    pic.classList.remove("is-ph");
+    pic.innerHTML = picInner(url, pic.dataset.name, "auto");
+  });
+}
+// a photo that fails to load: item's own URL -> fall back to lookup; looked-up URL -> icon tile
+document.addEventListener("error", e => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.classList.contains("ord-dish-img")) return;
+  const pic = img.closest(".ord-dish-pic"); if (!pic) return;
+  const key = pic.dataset.key, name = pic.dataset.name;
+  pic.classList.add("is-ph");
+  pic.innerHTML = picInner("", name, "");
+  if (img.dataset.from === "item" && dishImg[key] === undefined) { pic.setAttribute("data-need", ""); queueDish(key, name, true); return; }
+  delete dishImg[key]; saveDishCache(); dishImg[key] = "0";
+}, true);
+
+let dishObserver = null;
+function hydrateDishPhotos() {
+  if ("IntersectionObserver" in window && !dishObserver) {
+    dishObserver = new IntersectionObserver(entries => {
+      entries.forEach(en => {
+        if (!en.isIntersecting) return;
+        dishObserver.unobserve(en.target);
+        queueDish(en.target.dataset.key, en.target.dataset.name, true);
+      });
+    }, { rootMargin: "600px 0px" });
+  }
+  document.querySelectorAll(".ord-dish-pic[data-need]").forEach(pic => {
+    if (dishObserver) dishObserver.observe(pic); else queueDish(pic.dataset.key, pic.dataset.name, true);
+  });
+  // then the rest of the menu in the background so no dish is left without a photo
+  menuCache.forEach(i => { if (!explicitImg(i) && !DISH_OVERRIDES[dishKey(i)]) queueDish(dishKey(i), i.name, false); });
 }
 
 function itemCardHtml(i) {
   const inCartQty = cartQtyForItem(i.id);
   const hasOptions = (i.variants && i.variants.length) || (i.addons && i.addons.length);
   const priceLabel = i.variants?.length ? `From ${money(Math.min(...i.variants.map(v => v.price)))}` : money(i.basePrice || 0);
-  return `
-  <div class="ord-item-card" data-id="${i.id}">
-    <div class="ord-item-main">
-      <div class="ord-item-name">${vegDotHtml(i)}${escapeHtml(i.name)}</div>
-      <div class="ord-item-price">${priceLabel}</div>
-    </div>
-    ${inCartQty
-      ? `<div class="ord-item-stepper" data-id="${i.id}">
+  const actionHtml = inCartQty
+    ? `<div class="ord-item-stepper" data-id="${i.id}">
           <button type="button" data-act="minus" aria-label="Remove one ${escapeHtml(i.name)}">−</button>
           <span>${inCartQty}</span>
           <button type="button" data-act="plus" aria-label="Add one more ${escapeHtml(i.name)}">+</button>
         </div>`
-      : `<button class="ord-item-add-btn" ${hasOptions ? "" : `data-simple data-id="${i.id}"`}>${hasOptions ? "Select" : "Add"}</button>`}
+    : `<button class="ord-item-add-btn" ${hasOptions ? "" : `data-simple data-id="${i.id}"`}>${hasOptions ? "Select" : "Add"}</button>`;
+  return `
+  <div class="ord-item-card has-media" data-id="${i.id}">
+    <div class="ord-item-main">
+      <div class="ord-item-name">${vegDotHtml(i)}${escapeHtml(i.name)}</div>
+      <div class="ord-item-price">${priceLabel}</div>
+    </div>
+    <div class="ord-item-media">
+      ${dishMediaHtml(i)}
+      <div class="ord-item-act">${actionHtml}</div>
+    </div>
   </div>`;
 }
 
