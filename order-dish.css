@@ -43,3 +43,6 @@
 @keyframes ordDishIn{from{opacity:0}to{opacity:1}}
 @keyframes ordDishPulse{0%,100%{opacity:.55}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.ord-dish-img,.ord-dish-pic[data-need] .ord-dish-emoji{animation:none;}}
+
+.ord-credit{margin:4px 16px 96px;text-align:center;font-size:11px;color:var(--muted);}
+.ord-credit a{color:inherit;text-decoration:underline;}

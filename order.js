@@ -400,6 +400,9 @@ function renderMenu() {
 //  2. DISH_OVERRIDES below (your own hand-picked photo for a dish name)
 //  3. automatic lookup by dish name: TheMealDB, then Wikipedia (cached on the phone)
 //  4. a styled food-icon tile, so a card is never left bare
+// Photos come from the staff "Dish photos" tool (saved as imageUrl on each menu item).
+// Customer phones do NOT search the web, so no wrong/random pictures. Set true only for testing.
+const DISH_AUTO_LOOKUP = false;
 const DISH_OVERRIDES = {
   // "paneer-tikka": "https://your-cdn.com/paneer-tikka.jpg",   // key = dish name in lowercase, spaces -> "-"
 };
@@ -449,7 +452,7 @@ function dishMediaHtml(i) {
   const cached = dishImg[key] && dishImg[key] !== "0" ? dishImg[key] : "";
   const url = explicit || DISH_OVERRIDES[key] || cached;
   const from = explicit ? "item" : "auto";
-  const need = !url && dishImg[key] === undefined;
+  const need = DISH_AUTO_LOOKUP && !url && dishImg[key] === undefined;
   return `<div class="ord-dish-pic${url ? "" : " is-ph"}" data-key="${escapeHtml(key)}" data-name="${escapeHtml(i.name)}"${need ? " data-need" : ""}>${picInner(url, i.name, from)}</div>`;
 }
 
@@ -518,6 +521,7 @@ const dishNames = {};          // key -> display name
 const dishQueue = [];
 let dishActive = 0;
 function queueDish(key, name, front) {
+  if (!DISH_AUTO_LOOKUP) return;
   if (dishImg[key] !== undefined && dishImg[key] !== null) return;
   dishNames[key] = name;
   const at = dishQueue.indexOf(key);
@@ -552,12 +556,13 @@ document.addEventListener("error", e => {
   const key = pic.dataset.key, name = pic.dataset.name;
   pic.classList.add("is-ph");
   pic.innerHTML = picInner("", name, "");
-  if (img.dataset.from === "item" && dishImg[key] === undefined) { pic.setAttribute("data-need", ""); queueDish(key, name, true); return; }
+  if (DISH_AUTO_LOOKUP && img.dataset.from === "item" && dishImg[key] === undefined) { pic.setAttribute("data-need", ""); queueDish(key, name, true); return; }
   delete dishImg[key]; saveDishCache(); dishImg[key] = "0";
 }, true);
 
 let dishObserver = null;
 function hydrateDishPhotos() {
+  if (!DISH_AUTO_LOOKUP) return;
   if ("IntersectionObserver" in window && !dishObserver) {
     dishObserver = new IntersectionObserver(entries => {
       entries.forEach(en => {

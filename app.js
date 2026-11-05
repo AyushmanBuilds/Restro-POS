@@ -4665,3 +4665,166 @@ $("saveSettingsBtn").onclick = async () => {
   updateSettingsStatusStrip();
   toast("Settings saved");
 };
+
+
+// ===================== DISH PHOTOS (staff tool) =====================
+// Menu Builder -> "📷 Dish photos". Finds a real photo for every dish from Pexels (free key),
+// lets you check / change each one, then saves it on the menu item as `imageUrl`.
+// Customers' QR menu simply shows the saved photo (no API calls from their phones).
+(function dishPhotoFinder() {
+  const addBtn = document.getElementById("addItemBtn");
+  if (!addBtn || !addBtn.parentElement || document.getElementById("dishPhotosBtn")) return;
+  const KEY_LS = "zs_pexels_key";
+  const h = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const st = document.createElement("style");
+  st.textContent = `
+  .dp-card{max-width:780px !important;padding:0 !important;}
+  .dp-top{position:sticky;top:0;z-index:2;background:var(--surface);padding:18px 20px 12px;border-bottom:1px solid var(--line);}
+  .dp-top h2{margin:0 0 4px;font-size:18px;}
+  .dp-top p{margin:0 0 10px;font-size:12.5px;color:var(--muted);line-height:1.45;}
+  .dp-keyrow,.dp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .dp-keyrow input{flex:1 1 220px;min-width:0;margin:0 !important;}
+  .dp-actions{margin-top:10px;}
+  .dp-status{font-size:12.5px;font-weight:700;color:var(--primary-deep,#1b5e4a);margin-left:auto;}
+  .dp-list{padding:6px 20px 20px;}
+  .dp-row{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start;}
+  .dp-th{flex:0 0 76px;width:76px;height:76px;border-radius:14px;overflow:hidden;background:var(--surface-2,#f3efe8);display:grid;place-items:center;font-size:26px;}
+  .dp-th img{width:100%;height:100%;object-fit:cover;display:block;}
+  .dp-mid{flex:1;min-width:0;}
+  .dp-mid b{display:block;font-size:14px;}
+  .dp-mid small{color:var(--muted);font-size:11.5px;}
+  .dp-qrow{display:flex;gap:6px;margin-top:6px;}
+  .dp-qrow input{flex:1;min-width:0;margin:0 !important;padding:7px 10px !important;font-size:13px !important;}
+  .dp-ctl{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;}
+  .dp-ctl .dp-n{font-size:12px;color:var(--muted);min-width:70px;text-align:center;}
+  .dp-row.dirty .dp-th{outline:2px solid var(--primary,#1b5e4a);}
+  .dp-row button{font-size:12px;padding:6px 10px;}
+  `;
+  document.head.appendChild(st);
+
+  const btn = document.createElement("button");
+  btn.className = "btn-ghost"; btn.id = "dishPhotosBtn"; btn.textContent = "📷 Dish photos";
+  btn.title = "Find and save a real photo for every dish (shown on the customer QR menu)";
+  addBtn.parentElement.insertBefore(btn, addBtn);
+
+  const modal = document.createElement("div");
+  modal.id = "dpModal"; modal.className = "modal hidden";
+  modal.innerHTML = `
+  <div class="modal-card dp-card">
+    <div class="dp-top">
+      <h2>Dish photos</h2>
+      <p>Real food photos for the customer QR menu. Press <b>Find photos</b>, check each dish (◀ ▶ shows other photos, or edit the search words), then <b>Save</b>.
+         Free key: pexels.com/api &middot; allows about 200 searches per hour, so big menus may need a second round.</p>
+      <div class="dp-keyrow"><input type="password" id="dpKey" placeholder="Pexels API key (saved on this device only)" autocomplete="off"></div>
+      <div class="dp-actions">
+        <button class="btn-primary" id="dpFindBtn" type="button">Find photos for dishes without one</button>
+        <button class="btn-primary" id="dpSaveBtn" type="button">Save</button>
+        <button class="btn-ghost" id="dpCloseBtn" type="button">Close</button>
+        <span class="dp-status" id="dpStatus"></span>
+      </div>
+    </div>
+    <div class="dp-list" id="dpList"></div>
+  </div>`;
+  document.body.appendChild(modal);
+
+  const $d = (id) => document.getElementById(id);
+  let rows = [], finding = false;
+
+  const cleanQ = (name) => String(name || "").toLowerCase().replace(/\(.*?\)|\[.*?\]/g, " ")
+    .replace(/\b(special|spl|chef'?s?|house|signature|half|full|regular|large|small|medium|plate|portion|combo|new|classic|jumbo|mini)\b/g, " ")
+    .replace(/\bnon[\s-]?veg(etarian)?\b/g, " ").replace(/\bveg(etarian|gie)?\b/g, " ")
+    .replace(/[^\p{L}\p{N}\s'-]/gu, " ").replace(/\s+/g, " ").trim();
+  const fit = (u) => /[?&]h=\d+/.test(u) ? u.replace(/h=\d+/, "h=300&w=300&fit=crop") : u;
+
+  async function pexels(q, key) {
+    const r = await fetch("https://api.pexels.com/v1/search?per_page=8&orientation=square&query=" + encodeURIComponent(q + " food"), { headers: { Authorization: key } });
+    if (r.status === 429) throw new Error("limit");
+    if (r.status === 401 || r.status === 403) throw new Error("key");
+    if (!r.ok) throw new Error("http " + r.status);
+    const d = await r.json();
+    return (d.photos || []).map(p => ({ id: p.id, url: fit(p.src && (p.src.medium || p.src.large) || "") })).filter(p => p.url);
+  }
+
+  function paint(r) {
+    const el = modal.querySelector(`.dp-row[data-id="${CSS.escape(r.id)}"]`); if (!el) return;
+    el.classList.toggle("dirty", r.pick !== r.cur);
+    el.querySelector(".dp-th").innerHTML = r.pick ? `<img src="${h(r.pick)}" alt="" loading="lazy">` : "📷";
+    el.querySelector(".dp-n").textContent = r.msg || (r.cands.length ? `${r.idx + 1} / ${r.cands.length}` : (r.pick ? "saved photo" : "no photo"));
+  }
+  function summary() {
+    const have = rows.filter(r => r.pick).length, dirty = rows.filter(r => r.pick !== r.cur).length;
+    $d("dpStatus").textContent = `${have} / ${rows.length} dishes have a photo` + (dirty ? ` · ${dirty} unsaved` : "");
+  }
+  async function search(r) {
+    const key = $d("dpKey").value.trim();
+    if (!key) { $d("dpKey").focus(); toast("Paste your Pexels API key first"); throw new Error("nokey"); }
+    r.msg = "searching…"; paint(r);
+    try {
+      r.cands = await pexels(r.q, key);
+      r.idx = 0; r.pick = r.cands.length ? r.cands[0].url : r.pick;
+      r.msg = r.cands.length ? "" : "no match - edit words";
+    } finally { paint(r); summary(); }
+  }
+  function build() {
+    rows = menuCache.slice().sort((a, b) => String(a.category || "").localeCompare(String(b.category || "")) || String(a.name).localeCompare(String(b.name)))
+      .map(i => ({ id: i.id, name: i.name, cat: i.category || "", cur: i.imageUrl || "", pick: i.imageUrl || "", cands: [], idx: -1, q: cleanQ(i.name), msg: "" }));
+    $d("dpList").innerHTML = rows.map(r => `
+      <div class="dp-row" data-id="${h(r.id)}">
+        <div class="dp-th"></div>
+        <div class="dp-mid">
+          <b>${h(r.name)}</b><small>${h(r.cat)}</small>
+          <div class="dp-qrow"><input class="dp-q" value="${h(r.q)}" aria-label="Search words for ${h(r.name)}"><button class="btn-ghost" data-a="search" type="button">Search</button></div>
+          <div class="dp-ctl"><button class="btn-ghost" data-a="prev" type="button">◀</button><span class="dp-n"></span><button class="btn-ghost" data-a="next" type="button">▶</button><button class="btn-ghost" data-a="clear" type="button">Remove</button></div>
+        </div>
+      </div>`).join("");
+    rows.forEach(paint); summary();
+  }
+
+  $d("dpList").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const row = b.closest(".dp-row"), r = rows.find(x => x.id === row.dataset.id); if (!r) return;
+    try {
+      if (b.dataset.a === "search") { r.q = row.querySelector(".dp-q").value.trim() || r.q; await search(r); }
+      else if (b.dataset.a === "clear") { r.pick = ""; r.msg = ""; paint(r); summary(); }
+      else if (!r.cands.length) { await search(r); }
+      else { r.idx = (r.idx + (b.dataset.a === "next" ? 1 : -1) + r.cands.length) % r.cands.length; r.pick = r.cands[r.idx].url; r.msg = ""; paint(r); summary(); }
+    } catch (err) { if (err.message === "key") toast("Pexels rejected the key - check it"); else if (err.message === "limit") toast("Pexels hourly limit reached - try again in an hour"); else if (err.message !== "nokey") toast("Couldn't reach Pexels"); }
+  });
+  $d("dpList").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.classList.contains("dp-q")) { e.preventDefault(); e.target.closest(".dp-row").querySelector('[data-a="search"]').click(); } });
+
+  $d("dpFindBtn").onclick = async () => {
+    if (finding) return;
+    if (!$d("dpKey").value.trim()) { $d("dpKey").focus(); toast("Paste your Pexels API key first"); return; }
+    finding = true; const b = $d("dpFindBtn"); b.disabled = true;
+    const todo = rows.filter(r => !r.pick); let n = 0;
+    try {
+      for (const r of todo) {
+        b.textContent = `Finding… ${++n} / ${todo.length}`;
+        await search(r);
+        await new Promise(res => setTimeout(res, 300));
+      }
+      toast("Done - check the photos, then press Save");
+    } catch (err) {
+      toast(err.message === "limit" ? "Pexels hourly limit reached - press again in an hour to continue" : err.message === "key" ? "Pexels rejected the key - check it" : "Stopped - couldn't reach Pexels");
+    } finally { finding = false; b.disabled = false; b.textContent = "Find photos for dishes without one"; }
+  };
+  $d("dpSaveBtn").onclick = async () => {
+    const dirty = rows.filter(r => r.pick !== r.cur);
+    if (!dirty.length) { toast("Nothing to save"); return; }
+    const b = $d("dpSaveBtn"); b.disabled = true; b.textContent = "Saving…";
+    try {
+      await Promise.all(dirty.map(r => updateDoc(doc(db, "restaurants", restoId, "menu", r.id), { imageUrl: r.pick || "" })));
+      dirty.forEach(r => { r.cur = r.pick; paint(r); });
+      summary(); toast(`Saved ${dirty.length} dish photo${dirty.length === 1 ? "" : "s"}`);
+    } catch (err) { console.error(err); toast("Couldn't save: " + (err.message || err)); }
+    finally { b.disabled = false; b.textContent = "Save"; }
+  };
+  $d("dpKey").addEventListener("input", () => { try { localStorage.setItem(KEY_LS, $d("dpKey").value.trim()); } catch (e) {} });
+  $d("dpCloseBtn").onclick = () => modal.classList.add("hidden");
+  btn.onclick = () => {
+    if (!menuCache.length) { toast("Add menu items first"); return; }
+    try { $d("dpKey").value = localStorage.getItem(KEY_LS) || ""; } catch (e) {}
+    build(); modal.classList.remove("hidden");
+  };
+})();
