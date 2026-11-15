@@ -1,5 +1,6 @@
 // ===================== FIREBASE SETUP =====================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
+import { SEED_MENU_120 } from "./menu-seed-data.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   onAuthStateChanged, signOut, signInAnonymously
@@ -2453,6 +2454,36 @@ const SAMPLE_MENU_60 = [
 ];
 
 $("addItemBtn").onclick = () => openItemModal(null);
+
+// One-tap starter menu: adds the 120 ready-made items from menu-seed-data.js.
+// Items whose name already exists in your menu are skipped, so it is safe to press twice.
+async function loadSeedMenu() {
+  const btn = $("seedMenuBtn");
+  const have = new Set(menuCache.map(i => String(i.name || "").trim().toLowerCase()));
+  const fresh = SEED_MENU_120.filter(i => !have.has(i.name.toLowerCase()));
+  if (!fresh.length) { toast("All 120 sample items are already in your menu"); return; }
+  const ok = await showConfirm(
+    `${fresh.length} ready-made items (with Hindi and Odia names) will be added to your menu. Existing items are not touched.`,
+    { title: "Load sample menu?", okLabel: "Add items" }
+  );
+  if (!ok) return;
+  if (btn) btn.disabled = true;
+  try {
+    let done = 0;
+    for (let n = 0; n < fresh.length; n += 20) {
+      const chunk = fresh.slice(n, n + 20);
+      await Promise.all(chunk.map(i => addDoc(collection(db, "restaurants", restoId, "menu"), { ...i, available: true, upsellIds: [] })));
+      done += chunk.length;
+      if (btn) btn.textContent = `Adding… ${done}/${fresh.length}`;
+    }
+    toast(`Added ${done} items to your menu`);
+  } catch (e) {
+    console.error(e);
+    toast("Couldn't add all items — check your connection and press the button again (items already added are skipped)");
+  }
+  if (btn) { btn.disabled = false; btn.textContent = "Load 120 sample items"; }
+}
+if ($("seedMenuBtn")) $("seedMenuBtn").onclick = loadSeedMenu;
 $("itemModalClose").onclick = () => $("itemModal").classList.add("hidden");
 
 function openItemModal(item) {
