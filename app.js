@@ -12,13 +12,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCHOW_aj_Ccux2VkMsocs4SEpSrrFIPst0",
-  authDomain: "restro-billing-b61a6.firebaseapp.com",
-  projectId: "restro-billing-b61a6",
-  storageBucket: "restro-billing-b61a6.firebasestorage.app",
-  messagingSenderId: "554440969043",
-  appId: "1:554440969043:web:4818925230aad56c0aefa6",
-  measurementId: "G-5E2W1K8R5B"
+  apiKey: "AIzaSyAlEsXd9KaFtL1UtPIBq0pAEDiOdkodGls",
+  authDomain: "atithi-pos-ba671.firebaseapp.com",
+  projectId: "atithi-pos-ba671",
+  storageBucket: "atithi-pos-ba671.firebasestorage.app",
+  messagingSenderId: "381707528573",
+  appId: "1:381707528573:web:60ed4d37f6d6ff613fc414"
 };
 
 const fbApp = initializeApp(firebaseConfig);
@@ -63,7 +62,7 @@ let alertLastRing = 0; // declared early: playNotifSound() reads it before the a
 // be muted independently. Saved to Firestore (restoData.notificationSettings)
 // so the choice follows the account across devices, and mirrored to
 // localStorage for an instant read on page load before Firestore responds.
-const NOTIF_SOUND_DEFAULTS = { kds: "bell", qrorder: "chime", waiter: "urgent" };
+const NOTIF_SOUND_DEFAULTS = { kds: "bell", qrorder: "chime", waiter: "urgent", payment: "marimba" };
 let notifSoundSettings = (() => {
   try { return { ...NOTIF_SOUND_DEFAULTS, ...JSON.parse(localStorage.getItem("notifSoundSettings") || "{}") }; }
   catch (e) { return { ...NOTIF_SOUND_DEFAULTS }; }
@@ -74,6 +73,7 @@ let reservationsCache = [];
 let waitlistCache = [];
 let customerOrdersCache = [];
 let waiterCallsCache = []; // pending "call waiter" requests from the QR ordering pages
+let unsubPayReqs = null, payReqCache = [], payReqInitialDone = false;   // UPI payment claims from guests
 let editingExpenseId = null;
 let editingReservationId = null;
 let unsubExpenses = null, unsubReservations = null, unsubWaitlist = null, unsubCustomerOrders = null, unsubWaiterCalls = null;
@@ -510,6 +510,7 @@ onAuthStateChanged(auth, async (user) => {
     if (unsubWaitlist) unsubWaitlist();
     if (unsubCustomerOrders) unsubCustomerOrders();
     if (unsubWaiterCalls) unsubWaiterCalls();
+    if (unsubPayReqs) { unsubPayReqs(); unsubPayReqs = null; payReqCache = []; payReqInitialDone = false; }
     setStaffUnlocked(false); // sign-out always re-locks the staff area
     if (unsubRangeAttendance) unsubRangeAttendance();
     $("appShell").classList.add("hidden");
@@ -633,6 +634,16 @@ function attachListeners() {
     refreshAlerts();
   });
 
+    // UPI payments: guests who tapped "I've paid" (or webhook-confirmed payments) pop up for staff.
+  unsubPayReqs = onSnapshot(query(collection(db, "restaurants", restoId, "payRequests"), where("ack", "==", false)), (snap) => {
+    const seen = new Set(payReqCache.filter(p => p.status === "claimed" || p.status === "paid").map(p => p.id + ":" + p.status));
+    payReqCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const hasNew = payReqCache.some(p => (p.status === "claimed" || p.status === "paid") && !seen.has(p.id + ":" + p.status));
+    renderPayPopups();
+    if (hasNew && payReqInitialDone) playNotifSound("payment");
+    payReqInitialDone = true;
+  }, (err) => console.warn("Payment requests unavailable", err));
+
   // "Call waiter" requests customers send from the QR ordering page.
   const wcRef = collection(db, "restaurants", restoId, "waiterCalls");
   unsubWaiterCalls = onSnapshot(query(wcRef, where("status", "==", "pending")), (snap) => {
@@ -645,6 +656,48 @@ function attachListeners() {
     waiterCallsInitialLoadDone = true;
     refreshAlerts();
   });
+}
+
+// ===================== UPI PAYMENT POPUPS =====================
+// Shown on whatever screen staff are on.
+//  "claimed": guest says they've paid -> check your UPI app / soundbox, then press Received
+//  "paid"   : set by a payment webhook (optional) -> just an info popup
+function payPopHost() {
+  let h = $("payPopHost");
+  if (!h) { h = document.createElement("div"); h.id = "payPopHost"; h.className = "pp-host"; document.body.appendChild(h); h.addEventListener("click", onPayPopClick); }
+  return h;
+}
+function renderPayPopups() {
+  const list = payReqCache.filter(p => p.ack === false && (p.status === "claimed" || p.status === "paid"));
+  payPopHost().innerHTML = list.map(p => {
+    const label = `Table ${escapeHtml(p.tableName || "")} · ${money(p.amount || 0)}`;
+    const bill = p.billNo ? ` · Bill #${escapeHtml(p.billNo)}` : "";
+    if (p.status === "paid") return `<div class="pp paid" data-id="${p.id}"><div class="pp-ico">✅</div><div class="pp-main"><b>${label}</b><small>Payment received${bill}</small><div class="pp-act"><button class="yes" data-pp="ok">OK</button></div></div></div>`;
+    return `<div class="pp" data-id="${p.id}"><div class="pp-ico">💸</div><div class="pp-main"><b>${label}</b><small>Guest says they've paid by UPI${bill}. Check your UPI app or soundbox, then confirm.</small><div class="pp-act"><button class="yes" data-pp="yes">Received ✓</button><button class="no" data-pp="no">Not received</button></div></div></div>`;
+  }).join("");
+}
+async function onPayPopClick(e) {
+  const b = e.target.closest("button[data-pp]"); if (!b) return;
+  const card = b.closest(".pp"); const id = card && card.dataset.id; if (!id) return;
+  const btns = card.querySelectorAll("button");
+  btns.forEach(x => { x.disabled = true; });
+  const ref = doc(db, "restaurants", restoId, "payRequests", id);
+  try {
+    if (b.dataset.pp === "yes") {
+      await updateDoc(doc(db, "restaurants", restoId, "bills", id), { paymentMode: "upi", paymentStatus: "paid" });
+      await updateDoc(ref, { status: "paid", ack: true, paidAt: serverTimestamp(), confirmedBy: "staff" });
+      toast("Payment confirmed");
+    } else if (b.dataset.pp === "no") {
+      await updateDoc(ref, { status: "awaiting", ack: true, note: "not_found" });
+      toast("Guest asked to try again or pay at the counter");
+    } else {
+      await updateDoc(ref, { ack: true });
+    }
+  } catch (err) {
+    console.error(err);
+    toast("Couldn't update that payment. Try again.");
+    btns.forEach(x => { x.disabled = false; });
+  }
 }
 
 // ===================== DASHBOARD =====================
@@ -2406,6 +2459,10 @@ function openItemModal(item) {
   editingItemId = item ? item.id : null;
   $("itemModalTitle").textContent = item ? "Edit menu item" : "Add menu item";
   $("itmName").value = item ? item.name : "";
+  $("itmNameHi").value = item?.name_hi || "";
+  $("itmNameOr").value = item?.name_or || "";
+  $("itmAvailable").checked = item ? item.available !== false : true;
+  renderTagPicker(item?.tags);
   populateCategoryDropdown(item ? item.category : (mbActiveCategory !== "All" ? mbActiveCategory : ""));
   setVegToggle(item ? item.veg : "veg");
   $("itmBasePrice").value = item ? (item.basePrice || 0) : 0;
@@ -2454,6 +2511,26 @@ function setVegToggle(value) {
 $("itmVegToggle").querySelectorAll(".veg-btn").forEach(b => {
   b.onclick = () => setVegToggle(b.dataset.veg);
 });
+// ---- Diet tags + sold-out (86) toggle for menu items ----
+const ITEM_TAGS = [["jain", "Jain"], ["noOnionGarlic", "No onion/garlic"], ["vrat", "Vrat / fasting"], ["vegan", "Vegan"], ["eggless", "Eggless"], ["glutenFree", "Gluten-free"], ["nuts", "Contains nuts"]];
+function renderTagPicker(selected) {
+  const el = $("itmTagPicker"); if (!el) return;
+  const sel = new Set(selected || []);
+  el.innerHTML = ITEM_TAGS.map(([k, label]) => `<label class="tag-pick${k === "nuts" ? " warn" : ""}${sel.has(k) ? " on" : ""}"><input type="checkbox" value="${k}" ${sel.has(k) ? "checked" : ""}>${label}</label>`).join("");
+  el.querySelectorAll("input").forEach(cb => { cb.onchange = () => cb.parentNode.classList.toggle("on", cb.checked); });
+}
+function getSelectedTags() {
+  return [...document.querySelectorAll("#itmTagPicker input:checked")].map(c => c.value);
+}
+async function toggle86(id) {
+  const item = menuCache.find(i => i.id === id); if (!item) return;
+  const makeAvailable = item.available === false;
+  try {
+    await updateDoc(doc(db, "restaurants", restoId, "menu", id), { available: makeAvailable });
+    toast(makeAvailable ? `${item.name} is available again` : `${item.name} marked sold out — hidden from guests`);
+  } catch (e) { console.error(e); toast("Couldn't update that item. Try again."); }
+}
+
 function getVegToggleValue() {
   return $("itmVegToggle").querySelector(".veg-btn.active")?.dataset.veg || "veg";
 }
@@ -2541,7 +2618,8 @@ $("saveItemBtn").onclick = async () => {
     category,
     veg: getVegToggleValue(),
     basePrice: Math.max(0, parseFloat($("itmBasePrice").value) || 0),
-    variants, addons, available: true,
+    variants, addons, available: $("itmAvailable").checked,
+    name_hi: $("itmNameHi").value.trim(), name_or: $("itmNameOr").value.trim(), tags: getSelectedTags(),
     upsellIds
   };
   if (editingItemId) {
@@ -2610,12 +2688,15 @@ function renderMenuBuilder() {
   }
 
   el.innerHTML = items.map(i => `
-    <div class="mb-card" data-id="${i.id}">
+    <div class="mb-card${i.available === false ? " is-86" : ""}" data-id="${i.id}">
       ${vegIcon(i.veg)}
       <div class="mb-card-main">
         <div class="mb-name">${escapeHtml(i.name)}</div>
         <div class="mb-meta">
           <span class="mb-cat-pill">${escapeHtml(i.category)}</span>
+          <button type="button" class="mb-86${i.available === false ? " off" : ""}" data-id="${i.id}" title="Tap to switch between Available and Sold out">${i.available === false ? "Sold out" : "Available"}</button>
+          ${(i.tags || []).map(k => { const d = ITEM_TAGS.find(x => x[0] === k); return d ? `<span class="mb-tag${k === "nuts" ? " warn" : ""}">${d[1]}</span>` : ""; }).join("")}
+          ${i.name_hi ? `<span class="mb-lang-pill">हिं</span>` : ""}${i.name_or ? `<span class="mb-lang-pill">ଓଡ଼ି</span>` : ""}
           ${i.addons?.length ? `<span class="mb-addon-pill">${i.addons.length} add-on${i.addons.length === 1 ? "" : "s"}</span>` : ""}
         </div>
       </div>
@@ -2627,7 +2708,12 @@ function renderMenuBuilder() {
       <div class="mb-card-arrow">›</div>
     </div>`).join("");
   el.querySelectorAll(".mb-card").forEach(r => {
-    r.onclick = () => openItemModal(menuCache.find(i => i.id === r.dataset.id));
+    r.onclick = (e) => {
+      if (e.target.closest(".mb-86")) return;
+      openItemModal(menuCache.find(i => i.id === r.dataset.id));
+    };
+    const t86 = r.querySelector(".mb-86");
+    if (t86) t86.onclick = (e) => { e.stopPropagation(); toggle86(r.dataset.id); };
   });
 }
 
@@ -4077,11 +4163,25 @@ $("generateBillBtn").onclick = async () => {
   };
   const billRef = await addDoc(collection(db, "restaurants", restoId, "bills"), billData);
 
+  // UPI pay request: the guest's phone picks this up after checkout (only when a UPI ID is set in Settings)
+  let payPatch = {};
+  if (restoData.upiId && total > 0 && currentOrder?.id) {
+    try {
+      const payAmt = Math.round(total * 100) / 100;
+      await setDoc(doc(db, "restaurants", restoId, "payRequests", billRef.id), {
+        billNo, tableName: billData.tableName, amount: payAmt, upiId: restoData.upiId,
+        payeeName: restoData.name || "", status: "awaiting", ack: false,
+        orderId: currentOrder.id, createdAt: serverTimestamp()
+      });
+      payPatch = { billId: billRef.id, billNo, billTotal: payAmt };
+    } catch (e) { console.warn("UPI pay request not created", e); }
+  }
+
   // close this seat group's order — other seat groups on the same table (if
   // any) are untouched and keep running independently
   if (currentOrder?.id) {
     await updateDoc(doc(db, "restaurants", restoId, "orders", currentOrder.id), { status: "billed" });
-    syncCustomerOrderStatus(currentOrder.id, { kitchenStatus: "ready", kdsCleared: true, billed: true });
+    syncCustomerOrderStatus(currentOrder.id, { kitchenStatus: "ready", kdsCleared: true, billed: true, ...payPatch });
   }
 
   openBillModal({ id: billRef.id, ...billData, createdAt: { toDate: () => new Date() } });
@@ -4614,6 +4714,7 @@ function populateSettings() {
   $("setAddress").value = restoData.address || "";
   $("setPhone").value = restoData.phone || "";
   $("setGstin").value = restoData.gstin || "";
+  $("setUpi").value = restoData.upiId || "";
   $("setCgst").value = restoData.cgstPct ?? 2.5;
   $("setSgst").value = restoData.sgstPct ?? 2.5;
   $("setFooter").value = restoData.footer || "Thank you, visit again!";
@@ -4646,11 +4747,14 @@ if ($("darkKitchenToggle")) {
 }
 
 $("saveSettingsBtn").onclick = async () => {
+  const upiTry = ($("setUpi").value || "").trim().toLowerCase();
+  if (upiTry && !/^[a-z0-9._-]{2,}@[a-z][a-z0-9]{1,}$/.test(upiTry)) { toast("That UPI ID doesn't look right — it should look like name@bank"); return; }
   const data = {
     name: $("setName").value.trim(),
     address: $("setAddress").value.trim(),
     phone: $("setPhone").value.trim(),
     gstin: $("setGstin").value.trim(),
+    upiId: ($("setUpi").value || "").trim().toLowerCase(),
     cgstPct: Math.min(100, Math.max(0, parseFloat($("setCgst").value) || 0)),
     sgstPct: Math.min(100, Math.max(0, parseFloat($("setSgst").value) || 0)),
     footer: $("setFooter").value.trim()

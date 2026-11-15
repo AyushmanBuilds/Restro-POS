@@ -6,22 +6,22 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
 import {
-  getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp, query, where, onSnapshot
+  getFirestore, doc, getDoc, collection, getDocs, addDoc, serverTimestamp, query, where, onSnapshot, updateDoc
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCHOW_aj_Ccux2VkMsocs4SEpSrrFIPst0",
-  authDomain: "restro-billing-b61a6.firebaseapp.com",
-  projectId: "restro-billing-b61a6",
-  storageBucket: "restro-billing-b61a6.firebasestorage.app",
-  messagingSenderId: "554440969043",
-  appId: "1:554440969043:web:4818925230aad56c0aefa6",
-  measurementId: "G-5E2W1K8R5B"
+  apiKey: "AIzaSyAlEsXd9KaFtL1UtPIBq0pAEDiOdkodGls",
+  authDomain: "atithi-pos-ba671.firebaseapp.com",
+  projectId: "atithi-pos-ba671",
+  storageBucket: "atithi-pos-ba671.firebasestorage.app",
+  messagingSenderId: "381707528573",
+  appId: "1:381707528573:web:60ed4d37f6d6ff613fc414"
 };
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
 const $ = (id) => document.getElementById(id);
+const tt = (s) => (window.ZI18N ? window.ZI18N.t(s) : s);   // translate a message for alert()/toasts
 // Escapes item/category/table names before they go into innerHTML. These
 // come from the restaurant's own menu (staff-controlled), so risk is lower
 // than user input — but this page is public with no login, so every string
@@ -51,7 +51,7 @@ function isNonVeg(i) {
   return typeof v === "string" && /^non[\s_-]?veg/i.test(v.trim());
 }
 function dietMatches(i) { return dietFilter === "all" || (dietFilter === "nonveg") === isNonVeg(i); }
-function visibleMenu() { return menuCache.filter(dietMatches).filter(searchMatches); }
+function visibleMenu() { return menuCache.filter(dietMatches).filter(tagMatches).filter(searchMatches); }
 function vegDotHtml(i) {
   const nv = isNonVeg(i);
   return `<span class="ord-veg-dot ${nv ? "nonveg" : ""}" role="img" aria-label="${nv ? "Non-veg" : "Veg"}"></span>`;
@@ -76,6 +76,76 @@ function show(id) {
 function fail(msg) {
   $("errorMsg").textContent = msg;
   show("errorScreen");
+}
+
+// ===================== UPI PAYMENT (after checkout) =====================
+// When staff generate the final bill, the POS writes restaurants/{id}/payRequests/{billId}
+// (amount incl. taxes + the cafe's UPI ID) and stamps billId on this guest's customerOrders.
+// The bill screen listens for that, shows a Pay button + QR, then follows the status:
+//   awaiting -> (guest taps "I've paid") claimed -> (staff confirms, or a payment webhook) paid
+const payUnsubs = {};   // billId -> unsubscribe
+const payBills = {};    // billId -> payRequest data
+let payWatching = false;
+
+function upiLink(p) {
+  return "upi://pay?pa=" + encodeURIComponent(p.upiId || "") +
+    "&pn=" + encodeURIComponent(p.payeeName || "") +
+    "&am=" + (Math.round((Number(p.amount) || 0) * 100) / 100).toFixed(2) +
+    "&cu=INR&tn=" + encodeURIComponent("Bill " + (p.billNo || ""));
+}
+function watchPayment(b) {
+  if (payWatching || !b || !Array.isArray(b.orderIds) || !b.orderIds.length) return;
+  payWatching = true;
+  b.orderIds.forEach(oid => {
+    onSnapshot(doc(db, "restaurants", restoId, "customerOrders", oid), (s) => {
+      const bid = s.exists() ? s.data().billId : null;
+      if (!bid || payUnsubs[bid]) return;
+      payUnsubs[bid] = onSnapshot(doc(db, "restaurants", restoId, "payRequests", bid), (ps) => {
+        if (ps.exists()) payBills[bid] = { id: bid, ...ps.data() }; else delete payBills[bid];
+        renderPayCards();
+      }, (err) => console.warn("Payment status unavailable", err));
+    }, () => {});
+  });
+}
+function payCardHtml(p) {
+  const amt = money(p.amount || 0);
+  const ref = p.billNo ? ` · <span>Bill #${escapeHtml(p.billNo)}</span>` : "";
+  if (p.status === "paid") return `<section class="zp zp-paid" role="status"><div class="zp-check" aria-hidden="true">✓</div><b>Payment received — thank you!</b><small><span>${amt}</span>${ref}</small></section>`;
+  if (p.status === "claimed") return `<section class="zp zp-wait" role="status"><div class="zp-spin" aria-hidden="true"></div><b>Waiting for the cafe to confirm your payment…</b><small>This usually takes a few seconds.</small></section>`;
+  const link = upiLink(p);
+  return `<section class="zp">
+    <div class="zp-head"><span>Final bill (incl. taxes)</span><b>${amt}</b></div>
+    ${p.note === "not_found" ? `<p class="zp-warn">We couldn't find your payment yet. Please try again or pay at the reception.</p>` : ""}
+    <a class="zp-pay" href="${escapeHtml(link)}">Pay ${amt} with UPI</a>
+    <p class="zp-hint">Pay using any UPI app. The amount is filled in for you.</p>
+    <details><summary>Show QR to pay from another phone</summary><div class="zp-qr" data-qr="${escapeHtml(link)}"></div></details>
+    <button type="button" class="zp-done" data-claim="${escapeHtml(p.id)}">I've paid</button>
+  </section>`;
+}
+function renderPayCards() {
+  const host = $("upiPay"); if (!host) return;
+  const list = Object.values(payBills);
+  const wasOpen = host.querySelector("details") && host.querySelector("details").open;
+  host.innerHTML = list.map(payCardHtml).join("");
+  const allPaid = list.length > 0 && list.every(p => p.status === "paid");
+  const reception = document.querySelector(".ord-pay-card");
+  if (reception) reception.style.display = allPaid ? "none" : "";
+  host.querySelectorAll("[data-qr]").forEach(el => {
+    if (!window.QRCode) return;
+    try { new QRCode(el, { text: el.dataset.qr, width: 176, height: 176, colorDark: "#1E0C17", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
+  });
+  const d = host.querySelector("details"); if (d && wasOpen) d.open = true;
+  host.querySelectorAll("[data-claim]").forEach(btn => { btn.onclick = () => claimPaid(btn.dataset.claim, btn); });
+}
+async function claimPaid(id, btn) {
+  btn.disabled = true;
+  try {
+    await updateDoc(doc(db, "restaurants", restoId, "payRequests", id), { status: "claimed", ack: false, claimedAt: serverTimestamp() });
+  } catch (e) {
+    console.warn(e);
+    btn.disabled = false;
+    flashNote(tt("Couldn't send that — please tell the cashier."));
+  }
 }
 
 // ===================== INIT =====================
@@ -111,13 +181,16 @@ async function init() {
     let menuItems = null;
     try {
       const mSnap = await getDoc(doc(db, "restaurants", restoId, "public", "menu"));
-      if (mSnap.exists() && Array.isArray(mSnap.data().items)) menuItems = mSnap.data().items;
+      if (mSnap.exists() && Array.isArray(mSnap.data().items)) { menuItems = mSnap.data().items; menuSig = mSnap.data().sig || ""; menuLive = true; }
     } catch (e) { console.warn("Menu snapshot unavailable, reading menu directly", e); }
     if (!menuItems) {
       const menuSnap = await getDocs(collection(db, "restaurants", restoId, "menu"));
       menuItems = menuSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     }
     menuCache = menuItems.filter(i => i.available !== false);
+    if (window.ZI18N) window.ZI18N.setMenu(menuItems);
+    renderTagChips();
+    if (menuLive) watchMenuLive();
 
     // Look up how many chairs this table has (and which floor it's on) —
     // falls back to 4 seats / no floor if not found.
@@ -241,7 +314,7 @@ if ($("callWaiterBtn")) {
       console.error(e);
       btn.disabled = false;
       btn.textContent = "🔔 Call waiter";
-      alert("Couldn't reach staff — please wave someone down directly.");
+      alert(tt("Couldn't reach staff — please wave someone down directly."));
     }
   };
 }
@@ -258,7 +331,7 @@ let searchQuery = "";
 function norm(s) { return String(s || "").toLowerCase().trim(); }
 function searchMatches(i) {
   if (!searchQuery) return true;
-  return norm(i.name).includes(searchQuery) || norm(i.category).includes(searchQuery) || norm(i.description).includes(searchQuery);
+  return norm(i.name).includes(searchQuery) || norm(i.category).includes(searchQuery) || norm(i.description).includes(searchQuery) || (window.ZI18N && window.ZI18N.searchText(i).includes(searchQuery));
 }
 function headerHeight() { const h = document.querySelector(".ord-header"); return h ? h.offsetHeight : 0; }
 // After the list changes (search / filter), bring the results into view under the sticky header.
@@ -358,6 +431,78 @@ function setDietFilter(d) {
 $("vegToggle").onclick = () => setDietFilter(dietFilter === "veg" ? "all" : "veg");
 $("nonvegToggle").onclick = () => setDietFilter(dietFilter === "nonveg" ? "all" : "nonveg");
 
+// ---- Dietary tags: Jain / no onion-garlic / vrat / vegan / eggless / gluten-free ----
+// The owner ticks these per dish in the POS item editor (saved as item.tags).
+// "Contains nuts" is only ever a warning badge, never a filter.
+const TAG_DEFS = [
+  ["jain", "Jain"], ["noOnionGarlic", "No onion/garlic"], ["vrat", "Vrat / fasting"],
+  ["vegan", "Vegan"], ["eggless", "Eggless"], ["glutenFree", "Gluten-free"], ["nuts", "Contains nuts"]
+];
+const TAG_FILTERABLE = ["jain", "noOnionGarlic", "vrat", "vegan", "eggless", "glutenFree"];
+const TAG_KEY = "ord_tag_filter";
+let tagFilter = [];
+try { tagFilter = JSON.parse(sessionStorage.getItem(TAG_KEY) || "[]").filter(k => TAG_FILTERABLE.includes(k)); } catch (e) {}
+function itemTags(i) { return Array.isArray(i && i.tags) ? i.tags : []; }
+function tagMatches(i) { return !tagFilter.length || tagFilter.every(k => itemTags(i).includes(k)); }
+function itemTagsHtml(i) {
+  const t = itemTags(i);
+  if (!t.length) return "";
+  return `<div class="ord-tags">${TAG_DEFS.filter(([k]) => t.includes(k)).map(([k, label]) => `<span class="ord-tag${k === "nuts" ? " warn" : ""}">${escapeHtml(label)}</span>`).join("")}</div>`;
+}
+function renderTagChips() {
+  const host = $("tagChips"); if (!host) return;
+  const present = TAG_DEFS.filter(([k]) => TAG_FILTERABLE.includes(k) && menuCache.some(i => itemTags(i).includes(k)));
+  tagFilter = tagFilter.filter(k => present.some(([p]) => p === k));
+  host.classList.toggle("hidden", !present.length);
+  host.innerHTML = present.map(([k, label]) => `<button type="button" class="ord-tagchip${tagFilter.includes(k) ? " on" : ""}" data-tag="${k}" aria-pressed="${tagFilter.includes(k)}">${escapeHtml(label)}</button>`).join("");
+}
+if ($("tagChips")) $("tagChips").addEventListener("click", (e) => {
+  const b = e.target.closest ? e.target.closest(".ord-tagchip") : null;
+  if (!b) return;
+  const k = b.dataset.tag;
+  tagFilter = tagFilter.includes(k) ? tagFilter.filter(x => x !== k) : [...tagFilter, k];
+  try { sessionStorage.setItem(TAG_KEY, JSON.stringify(tagFilter)); } catch (e2) {}
+  renderTagChips();
+  refreshMenuView();
+});
+
+// ---- Live menu: a dish marked sold out (86'd) disappears from every open phone within seconds ----
+let menuSig = "", menuLive = false, menuWatching = false;
+function flashNote(msg) {
+  const old = document.querySelector(".zi-toast"); if (old) old.remove();
+  const d = document.createElement("div");
+  d.className = "zi-toast"; d.setAttribute("role", "status"); d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 5000);
+}
+function pruneCart() {
+  const gone = cart.filter(c => !menuCache.some(m => m.id === c.itemId));
+  if (!gone.length) return;
+  cart = cart.filter(c => menuCache.some(m => m.id === c.itemId));
+  [...new Set(gone.map(c => c.name))].forEach(n => flashNote(`${n} is no longer available and was removed from your order.`));
+}
+function applyMenu(items) {
+  menuCache = items.filter(i => i.available !== false);
+  if (window.ZI18N) window.ZI18N.setMenu(items);
+  if (activeSheetItem && !menuCache.some(m => m.id === activeSheetItem.id)) closeItemSheet();
+  pruneCart();
+  renderTagChips();
+  renderCategoryTabs();
+  renderMenu();
+  refreshCartUI();
+}
+function watchMenuLive() {
+  if (menuWatching) return;
+  menuWatching = true;
+  onSnapshot(doc(db, "restaurants", restoId, "public", "menu"), (snap) => {
+    if (!snap.exists()) return;
+    const d = snap.data();
+    if (!Array.isArray(d.items) || (d.sig && d.sig === menuSig)) return;
+    menuSig = d.sig || "";
+    applyMenu(d.items);
+  }, (err) => console.warn("Live menu updates unavailable", err));
+}
+
 function cssEscape(s) { return s.replace(/[^a-zA-Z0-9]/g, "_"); }
 
 function cartQtyForItem(itemId) {
@@ -371,7 +516,7 @@ function renderMenu() {
       <div class="ord-cat-heading">${escapeHtml(cat)}</div>
       ${visibleMenu().filter(i => (i.category || "Menu") === cat).map(itemCardHtml).join("")}
     </div>
-  `).join("") || `<div class="ord-empty-note">${searchQuery ? `No dishes found for “${escapeHtml($("menuSearchInput").value.trim())}”${dietFilter === "all" ? "" : ` in ${dietFilter === "veg" ? "veg" : "non-veg"}`}. Try another name.` : dietFilter === "all" ? "Menu isn't available right now." : `No ${dietFilter === "veg" ? "veg" : "non-veg"} items available right now.`}</div>`;
+  `).join("") || `<div class="ord-empty-note">${tagFilter.length && !searchQuery ? tt("No dishes match these filters.") : searchQuery ? `No dishes found for “${escapeHtml($("menuSearchInput").value.trim())}”${dietFilter === "all" ? "" : ` in ${dietFilter === "veg" ? "veg" : "non-veg"}`}. Try another name.` : dietFilter === "all" ? "Menu isn't available right now." : `No ${dietFilter === "veg" ? "veg" : "non-veg"} items available right now.`}</div>`;
 
   document.querySelectorAll(".ord-item-card").forEach(card => {
     card.onclick = () => {
@@ -595,6 +740,7 @@ function itemCardHtml(i) {
     <div class="ord-item-main">
       <div class="ord-item-name">${vegDotHtml(i)}${escapeHtml(i.name)}</div>
       <div class="ord-item-price">${priceLabel}</div>
+      ${itemTagsHtml(i)}
     </div>
     <div class="ord-item-media">
       ${dishMediaHtml(i)}
@@ -812,9 +958,10 @@ $("cartOverlay").onclick = () => { $("cartDrawer").classList.add("hidden"); $("c
 // ===================== PLACE ORDER =====================
 $("placeOrderBtn").onclick = async () => {
   if (sessionEnded || !cart.length) return;
+  if (cart.some(c => !menuCache.some(m => m.id === c.itemId))) { pruneCart(); refreshCartUI(); renderMenu(); return; }
   const custName = $("custNameInput").value.trim();
   if (!custName) {
-    alert("Please enter your name before sending the order — it helps staff find you at the table.");
+    alert(tt("Please enter your name before sending the order — it helps staff find you at the table."));
     $("custNameInput").focus();
     return;
   }
@@ -822,7 +969,7 @@ $("placeOrderBtn").onclick = async () => {
   if (custPhone.length === 12 && custPhone.startsWith("91")) custPhone = custPhone.slice(2);
   else if (custPhone.length === 11 && custPhone.startsWith("0")) custPhone = custPhone.slice(1);
   if (!/^[6-9]\d{9}$/.test(custPhone)) {
-    alert("Please enter a valid 10-digit mobile number — we'll send your bill on WhatsApp.");
+    alert(tt("Please enter a valid 10-digit mobile number — we'll send your bill on WhatsApp."));
     $("custPhoneInput").focus();
     return;
   }
@@ -852,7 +999,7 @@ $("placeOrderBtn").onclick = async () => {
     window.scrollTo(0, 0);
   } catch (e) {
     console.error(e);
-    alert("Couldn't send your order — please try again or call staff.");
+    alert(tt("Couldn't send your order — please try again or call staff."));
   }
   $("placeOrderBtn").disabled = false;
   $("placeOrderBtn").textContent = "Send order to kitchen";
@@ -1087,7 +1234,8 @@ function finishCheckout() {
     restoName: $("restoName").textContent || "",
     tableName,
     ref: "T" + String(tableName).replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 4) + "-" + Date.now().toString(36).toUpperCase().slice(-5),
-    name: bill.name, seats: bill.seats, orders: bill.orders, lines: bill.lines, total: bill.total
+    name: bill.name, seats: bill.seats, orders: bill.orders, lines: bill.lines, total: bill.total,
+    orderIds: loadTracked().map(x => x.id)
   };
   try { localStorage.setItem(CHECKOUT_KEY, JSON.stringify(snap)); } catch (e) {}
   sessionEnded = true;
@@ -1115,6 +1263,7 @@ function finishCheckout() {
 }
 
 function renderBill(b) {
+  watchPayment(b);
   $("billRestoName").textContent = b.restoName || $("restoName").textContent || "Bill";
   $("billTableLabel").textContent = b.tableName || tableName;
   $("billAmount").textContent = money(b.total || 0);

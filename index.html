@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="pos-redesign.css">
 <link rel="stylesheet" href="staff-qr.css">
 <link rel="stylesheet" href="atithya.css">
+<link rel="stylesheet" href="features-v2.css">
 </head>
 <body>
 
@@ -650,6 +651,7 @@
                 <div class="st-grid">
                   <label class="st-field">GSTIN <input type="text" id="setGstin" placeholder="22AAAAA0000A1Z5"></label>
                   <label class="st-field">Bill footer note <input type="text" id="setFooter" placeholder="Thank you, visit again!"></label>
+                  <label class="st-field st-wide">UPI ID for customer payments <input type="text" id="setUpi" placeholder="yourcafe@okhdfcbank" autocapitalize="off" autocomplete="off"><span class="itm-hint">Use your business / merchant UPI ID. Leave blank to keep "pay at the counter" only.</span></label>
                   <label class="st-field">CGST % <input type="number" id="setCgst" value="2.5" step="0.1"></label>
                   <label class="st-field">SGST % <input type="number" id="setSgst" value="2.5" step="0.1"></label>
                 </div>
@@ -748,6 +750,10 @@
   <div class="modal-card">
     <div class="modal-head"><h2 id="itemModalTitle">Add menu item</h2><button class="modal-x" id="itemModalClose">×</button></div>
     <label>Item name <input type="text" id="itmName" placeholder="Margherita Pizza"></label>
+    <div class="itm-two">
+      <label>Name in Hindi <input type="text" id="itmNameHi" placeholder="पनीर बटर मसाला"><span class="itm-hint">Optional. Blank = common dishes are translated automatically.</span></label>
+      <label>Name in Odia <input type="text" id="itmNameOr" placeholder="ପନିର ବଟର ମସଲା"><span class="itm-hint">Optional. Guests switch language on the QR menu.</span></label>
+    </div>
     <label>Category
       <select id="itmCategorySelect"></select>
     </label>
@@ -758,6 +764,12 @@
       </div>
     </label>
     <label>Base price (if no size variants) ₹ <input type="number" id="itmBasePrice" value="0"></label>
+    <label class="itm-avail"><input type="checkbox" id="itmAvailable" checked> Available today <span class="itm-hint">Untick = sold out. It disappears from the QR menu within seconds.</span></label>
+    <div class="sub-block">
+      <div class="sub-block-head">🥗 Diet tags</div>
+      <div id="itmTagPicker" class="tag-picker"></div>
+      <span class="itm-hint">Shown as badges on the guest menu and used for filters. Only tick what is true for this dish.</span>
+    </div>
 
     <div class="sub-block">
       <div class="sub-block-head">Size / variant options <button class="btn-mini" id="addVariantRow">+ add</button></div>

@@ -1,0 +1,130 @@
+/* =====================================================================
+   ATITHYA — features v2: language switcher, diet tags, sold-out (86)
+   toggle, UPI pay card, staff payment popup.
+   Load LAST on BOTH pages (order.html and index.html), after atithya.css.
+   Additive only: remove the <link> to drop the styling.
+   ===================================================================== */
+
+/* ---------- Fonts for Hindi / Odia (Latin text keeps Inter / Sora) ---------- */
+html[data-lang="hi"]{
+  --font-body:'Inter','Noto Sans Devanagari',-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-display:'Sora','Noto Sans Devanagari',sans-serif;
+}
+html[data-lang="or"]{
+  --font-body:'Inter','Noto Sans Oriya',-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-display:'Sora','Noto Sans Oriya',sans-serif;
+}
+/* The old built-in Hindi lines would duplicate the selected language, so hide them
+   whenever Hindi or Odia is chosen (English keeps the original bilingual look). */
+html[data-lang="hi"] body [lang="hi"],
+html[data-lang="or"] body [lang="hi"]{display:none !important;}
+
+/* ---------- Language switcher ---------- */
+.zi-lang{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:rgba(30,12,23,.62);
+  border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+.zi-lang button{border:0;background:transparent;color:#F3E8EE;font:700 12.5px/1 var(--font-body,'Inter',sans-serif);
+  padding:7px 11px;border-radius:999px;cursor:pointer;min-width:38px;}
+.zi-lang button.on{background:#F6F2F0;color:#3F0F2A;}
+.zi-lang button:focus-visible{outline:2px solid #E8B04B;outline-offset:1px;}
+.zi-float{position:absolute;top:12px;right:12px;z-index:5;}
+.zi-fixed{position:fixed;top:12px;right:12px;z-index:60;}
+.zi-inline{margin-left:auto;}
+.ord-trk-top{flex-wrap:wrap;gap:8px;}
+.ord-bill .zi-lang,.ord-track .zi-lang{background:#3F0F2A;}
+
+/* ---------- Diet tag chips (customer header) ---------- */
+.ord-tag-chips{display:flex;gap:6px;overflow-x:auto;padding:0 18px 12px;scrollbar-width:none;}
+.ord-tag-chips::-webkit-scrollbar{display:none;}
+.ord-tagchip{flex:0 0 auto;height:32px;padding:0 12px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#E9DEE4;font:700 12.5px var(--font-body);
+  transition:background .15s,border-color .15s,color .15s;}
+.ord-tagchip.on{background:rgba(232,176,75,.24);border-color:#E8B04B;color:#fff;}
+.ord-tagchip:active{transform:scale(.97);}
+.ord-tagchip:focus-visible{outline:2px solid #F6F2F0;outline-offset:2px;}
+@media (min-width:720px){.ord-tag-chips{padding:0 max(28px,calc((100% - 1100px)/2 + 28px)) 14px;}}
+
+/* tag badges on each dish card */
+.ord-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.ord-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#F3ECF0;color:#5A173A;font:700 10.5px/1.5 var(--font-body);letter-spacing:.01em;}
+.ord-tag.warn{background:#FFF1D6;color:#8A5A00;}
+.ord-tag-note{margin:0 16px 6px;text-align:center;font-size:11px;color:var(--muted,#6E6468);}
+
+/* small floating notice ("X is no longer available") */
+.zi-toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:80;max-width:min(92vw,420px);
+  padding:11px 16px;border-radius:14px;background:#1E0C17;color:#fff;font:600 13.5px/1.4 var(--font-body);
+  box-shadow:0 12px 30px rgba(0,0,0,.35);text-align:center;animation:ziIn .22s ease both;}
+@keyframes ziIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* ---------- UPI pay card on the customer bill screen ---------- */
+.zp{margin:14px 16px 0;padding:16px;border-radius:18px;background:var(--surface,#fff);border:1.5px solid var(--primary,#5E1B40);
+  box-shadow:0 8px 20px rgba(94,27,64,.1);text-align:center;}
+@media (min-width:600px){.zp{margin-inline:16px;}}
+.zp-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;font-weight:700;color:var(--muted,#6E6468);text-align:left;}
+.zp-head b{font-family:var(--font-display);font-size:26px;font-weight:800;color:var(--primary-deep,#3F0F2A);font-variant-numeric:tabular-nums;}
+.zp-pay{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;height:50px;border-radius:14px;text-decoration:none;
+  background:linear-gradient(135deg,#E07B16,#B35405);color:#fff;font:800 15px var(--font-body);box-shadow:0 10px 22px -8px rgba(196,98,10,.7);}
+.zp-pay:active{transform:scale(.98);}
+.zp-hint{margin:8px 0 0;font-size:12px;line-height:1.45;color:var(--muted,#6E6468);}
+.zp-warn{margin:10px 0 0;padding:9px 12px;border-radius:12px;background:#FDF1EE;border:1px solid #F3D7BF;color:#8C4E18;font-size:12.5px;line-height:1.4;text-align:left;}
+.zp details{margin-top:12px;text-align:left;}
+.zp summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--primary,#5E1B40);}
+.zp-qr{display:grid;place-items:center;padding:14px 0 4px;}
+.zp-qr img,.zp-qr canvas{border-radius:10px;}
+.zp-done{width:100%;margin-top:12px;height:46px;border-radius:14px;cursor:pointer;background:var(--surface,#fff);color:var(--ink,#1D1519);
+  border:1.5px solid var(--ink,#1D1519);font:800 14.5px var(--font-body);}
+.zp-done:disabled{opacity:.5;cursor:not-allowed;}
+.zp-wait,.zp-paid{padding:20px 16px;}
+.zp-spin{width:30px;height:30px;margin:0 auto 10px;border-radius:50%;border:3px solid #E7DEE0;border-top-color:var(--primary,#5E1B40);animation:zpSpin .9s linear infinite;}
+@keyframes zpSpin{to{transform:rotate(360deg)}}
+.zp-wait b,.zp-paid b{display:block;font-size:15px;font-weight:700;line-height:1.35;}
+.zp-wait small,.zp-paid small{display:block;margin-top:4px;font-size:12.5px;color:var(--muted,#6E6468);}
+.zp-paid{border-color:#2FB36B;background:#F1FBF5;}
+.zp-check{width:46px;height:46px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:#2FB36B;color:#fff;font-size:24px;font-weight:800;}
+@media (prefers-reduced-motion:reduce){.zp-spin{animation:none;}.zi-toast{animation:none;}}
+
+/* =====================================================================
+   STAFF APP (index.html)
+   ===================================================================== */
+
+/* sold-out (86) toggle + tags on menu builder cards */
+.mb-86{border:0;cursor:pointer;padding:3px 10px;border-radius:999px;font:700 11.5px var(--font-body,'Inter',sans-serif);
+  background:#E4F6EC;color:#0F7A44;}
+.mb-86::before{content:"● ";}
+.mb-86.off{background:#FDE8E6;color:#B3261E;}
+.mb-86:focus-visible{outline:2px solid #5E1B40;outline-offset:2px;}
+.mb-card.is-86{opacity:.62;}
+.mb-card.is-86 .mb-name{text-decoration:line-through;}
+.mb-tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#F3ECF0;color:#5A173A;font:700 11px var(--font-body,'Inter',sans-serif);}
+.mb-tag.warn{background:#FFF1D6;color:#8A5A00;}
+.mb-lang-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#E8F0FA;color:#1F5C99;font:700 11px var(--font-body,'Inter',sans-serif);}
+
+/* item editor: translations, availability, tags */
+.itm-two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media (max-width:520px){.itm-two{grid-template-columns:1fr;}}
+.itm-hint{display:block;margin:4px 0 0;font-size:11.5px;font-weight:500;line-height:1.4;color:#6E6468;}
+.itm-avail{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#F8F4F6;border:1px solid #E7DEE0;font-weight:600;}
+.itm-avail input{width:18px;height:18px;flex:0 0 auto;}
+.tag-picker{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+.tag-pick{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1.5px solid #E7DEE0;background:#fff;
+  font:600 12.5px var(--font-body,'Inter',sans-serif);cursor:pointer;}
+.tag-pick input{margin:0;}
+.tag-pick.on{border-color:#5E1B40;background:#F3ECF0;}
+.tag-pick.warn.on{border-color:#C98A00;background:#FFF1D6;}
+
+/* payment popup (shown on whatever screen staff are on) */
+.pp-host{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:10px;width:min(380px,calc(100vw - 32px));}
+.pp{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:18px;background:#fff;border:1.5px solid #E8B04B;
+  box-shadow:0 18px 44px rgba(30,13,22,.28);animation:ppIn .25s ease both;}
+.pp.paid{border-color:#2FB36B;}
+.pp-ico{flex:0 0 40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:#FFF1D6;}
+.pp.paid .pp-ico{background:#E4F6EC;}
+.pp-main{min-width:0;flex:1;}
+.pp-main b{display:block;font-size:15px;font-weight:800;color:#1E0C17;}
+.pp-main small{display:block;margin-top:3px;font-size:12.5px;line-height:1.4;color:#6E6468;}
+.pp-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.pp-act button{border:0;border-radius:10px;padding:8px 14px;font:800 13px var(--font-body,'Inter',sans-serif);cursor:pointer;}
+.pp-act .yes{background:#1E0C17;color:#fff;}
+.pp-act .no{background:#F3ECF0;color:#3F0F2A;}
+.pp-act button:disabled{opacity:.55;cursor:wait;}
+@keyframes ppIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.pp{animation:none;}}
