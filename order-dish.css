@@ -5,20 +5,20 @@
 .ord-item-card.has-media .ord-item-main{align-self:center;}
 .ord-item-card.has-media .ord-item-name{font-size:15px;line-height:1.3;display:flex;align-items:flex-start;gap:7px;overflow-wrap:anywhere;}
 .ord-item-card.has-media .ord-item-name .ord-veg-dot{margin-top:3px;flex:0 0 auto;}
-.ord-item-card.has-media .ord-item-price{font-size:14px;font-weight:600;color:var(--ink-soft,#4a5160);margin-top:5px;}
+.ord-item-card.has-media .ord-item-price{font-size:14px;font-weight:600;color:var(--ink-soft,#604A53);margin-top:5px;}
 
 /* photo + Add button that overlaps its bottom edge */
 .ord-item-media{position:relative;flex:0 0 auto;width:112px;margin-bottom:16px;}
-.ord-dish-pic{position:relative;width:112px;height:112px;border-radius:18px;overflow:hidden;background:var(--surface-2,#f3efe8);
-  box-shadow:0 4px 14px rgba(20,20,30,.12);}
+.ord-dish-pic{position:relative;width:112px;height:112px;border-radius:18px;overflow:hidden;background:var(--surface-2,#F0EBED);
+  box-shadow:0 4px 14px rgba(28,21,24,.12);}
 .ord-dish-img{display:block;width:100%;height:100%;object-fit:cover;animation:ordDishIn .35s ease both;}
-.ord-dish-pic.is-ph{display:grid;place-items:center;background:linear-gradient(145deg,#FBF3E4 0%,#F1E3C9 100%);}
+.ord-dish-pic.is-ph{display:grid;place-items:center;background:linear-gradient(145deg,#F2EDEF 0%,#E2D8DC 100%);}
 .ord-dish-emoji{font-size:42px;line-height:1;filter:saturate(.9);}
 .ord-dish-pic[data-need] .ord-dish-emoji{animation:ordDishPulse 1.2s ease-in-out infinite;}
 
 .ord-item-act{position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);z-index:2;display:flex;justify-content:center;}
-.ord-item-act .ord-item-add-btn{min-width:84px;padding:8px 14px;background:#fff;box-shadow:0 5px 14px rgba(20,20,30,.2);font-size:14px;letter-spacing:.02em;text-transform:uppercase;}
-.ord-item-act .ord-item-stepper{background:#fff;box-shadow:0 5px 14px rgba(20,20,30,.2);}
+.ord-item-act .ord-item-add-btn{min-width:84px;padding:8px 14px;background:#fff;box-shadow:0 5px 14px rgba(28,21,24,.2);font-size:14px;letter-spacing:.02em;text-transform:uppercase;}
+.ord-item-act .ord-item-stepper{background:#fff;box-shadow:0 5px 14px rgba(28,21,24,.2);}
 .ord-item-act .ord-item-stepper button{width:30px;height:30px;}
 .ord-item-act .ord-item-stepper span{min-width:22px;}
 

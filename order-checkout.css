@@ -34,14 +34,14 @@
 .ord-co-sum{display:flex;justify-content:space-between;align-items:center;margin:16px 0 12px;padding:12px 14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);text-align:left;}
 .ord-co-sum small{display:block;font-size:12px;font-weight:600;color:var(--muted);}
 .ord-co-sum b{font-family:var(--font-display);font-size:19px;font-weight:800;color:var(--primary-deep);font-variant-numeric:tabular-nums;}
-.ord-co-warn{margin:0 0 10px;padding:12px 13px;border-radius:12px;background:#FDF1EE;border:1px solid #F3C9BF;color:#8C2A18;text-align:left;font-size:13px;line-height:1.45;}
+.ord-co-warn{margin:0 0 10px;padding:12px 13px;border-radius:12px;background:#FDF1EE;border:1px solid #F3D7BF;color:#8C4E18;text-align:left;font-size:13px;line-height:1.45;}
 .ord-co-warn b{font-weight:800;}
 .ord-co-warn .hi{display:block;margin-top:3px;font-weight:600;}
-.ord-co-pending{margin:0 0 10px;padding:10px 13px;border-radius:12px;background:var(--teal-tint);color:#0A5655;text-align:left;font-size:12.5px;line-height:1.45;}
+.ord-co-pending{margin:0 0 10px;padding:10px 13px;border-radius:12px;background:var(--teal-tint);color:#560A34;text-align:left;font-size:12.5px;line-height:1.45;}
 .ord-co-pending .hi{display:block;margin-top:2px;font-weight:600;}
 .ord-co-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 .ord-co-yes,.ord-co-no{width:100%;border-radius:14px;padding:12px 16px;cursor:pointer;font-family:var(--font-body);display:flex;flex-direction:column;align-items:center;gap:1px;}
-.ord-co-yes{background:var(--ink);color:#fff;border:0;font-weight:800;font-size:15px;box-shadow:0 10px 24px rgba(22,26,35,.25);}
+.ord-co-yes{background:var(--ink);color:#fff;border:0;font-weight:800;font-size:15px;box-shadow:0 10px 24px rgba(32,25,28,.25);}
 .ord-co-no{background:var(--surface);color:var(--ink);border:1.5px solid var(--line);font-weight:700;font-size:14.5px;}
 .ord-co-yes .hi,.ord-co-no .hi{font-size:13px;font-weight:600;opacity:.85;}
 .ord-co-yes:disabled{opacity:.6;}
@@ -52,7 +52,7 @@
 .ord-bill.hidden{display:none !important;}
 @media (min-width:600px){.ord-bill{max-width:560px;margin:0 auto;}}
 
-.ord-bill-hero{margin:16px 16px 0;padding:24px 20px 22px;border-radius:22px;text-align:center;color:#fff;background:var(--primary-grad);box-shadow:0 14px 30px rgba(15,61,48,.22);}
+.ord-bill-hero{margin:16px 16px 0;padding:24px 20px 22px;border-radius:22px;text-align:center;color:#fff;background:var(--primary-grad);box-shadow:0 14px 30px rgba(61,15,40,.22);}
 .ord-bill-check{width:46px;height:46px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.4);}
 .ord-bill-check svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;}
 .ord-bill-hero h1{font-size:20px;font-weight:600;}
@@ -62,7 +62,7 @@
 .ord-bill-amt-lbl .hi{text-transform:none;letter-spacing:0;}
 .ord-bill-amt{margin-top:4px;font-family:var(--font-display);font-weight:800;font-size:42px;line-height:1.1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
 
-.ord-pay-card{display:flex;gap:14px;align-items:flex-start;margin:14px 16px 0;padding:16px;border-radius:18px;background:var(--surface);border:1.5px solid var(--primary);box-shadow:0 8px 20px rgba(27,94,74,.1);}
+.ord-pay-card{display:flex;gap:14px;align-items:flex-start;margin:14px 16px 0;padding:16px;border-radius:18px;background:var(--surface);border:1.5px solid var(--primary);box-shadow:0 8px 20px rgba(94,27,64,.1);}
 .ord-pay-ico{flex:0 0 46px;height:46px;border-radius:14px;display:grid;place-items:center;background:var(--primary-tint);color:var(--primary-deep);}
 .ord-pay-ico svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .ord-pay-txt{min-width:0;}
@@ -71,7 +71,7 @@
 .ord-pay-txt small{display:block;margin-top:8px;font-size:12.5px;line-height:1.45;color:var(--muted);}
 .ord-pay-txt small .hi{display:block;}
 
-.ord-receipt-wrap{margin:14px 16px 0;filter:drop-shadow(0 4px 12px rgba(20,20,30,.08));}
+.ord-receipt-wrap{margin:14px 16px 0;filter:drop-shadow(0 4px 12px rgba(28,21,24,.08));}
 .ord-receipt{background:var(--surface);border-radius:18px 18px 0 0;padding:18px 18px 26px;
   -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/16px 100%;
           mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/16px 100%;}

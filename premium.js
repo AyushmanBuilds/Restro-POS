@@ -1,4 +1,4 @@
-/* Zayka Serve — premium UI helpers. Additive only: it clicks your existing
+/* Atithya — premium UI helpers. Additive only: it clicks your existing
    buttons and never touches app.js logic or data. */
 (function(){
   function init(){

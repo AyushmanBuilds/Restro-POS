@@ -1,4 +1,4 @@
-/* Zayka Serve — POS redesign helpers.
+/* Atithya — POS redesign helpers.
    Additive only (same approach as premium.js): it reads the DOM that app.js
    already renders and clicks your existing buttons. It never touches app.js
    logic, Firestore data or any element ID. */
@@ -97,7 +97,7 @@
       tiles.forEach(function (t) {
         if (!t.dataset.pxc) {
           // colour was set inline by app.js (catColor); remember it before CSS repaints the tile white
-          t.dataset.pxc = t.style.backgroundColor || '#D64526';
+          t.dataset.pxc = t.style.backgroundColor || '#C4620A';
           var rgb = toRGB(t.dataset.pxc) || [214, 69, 38];
           t.style.setProperty('--cat', t.dataset.pxc);
           t.style.setProperty('--cat-soft', 'rgba(' + rgb.join(',') + ',.14)');

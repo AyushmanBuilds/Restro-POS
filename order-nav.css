@@ -7,7 +7,7 @@
 /* ---------- Search ---------- */
 .ord-search{position:relative;flex:1 1 0;min-width:0;display:flex;align-items:center;height:42px;border-radius:999px;
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;transition:background .15s,border-color .15s;}
-.ord-search:focus-within{background:rgba(255,255,255,.16);border-color:#F6EFE4;}
+.ord-search:focus-within{background:rgba(255,255,255,.16);border-color:#F6F2F0;}
 .ord-search svg{position:absolute;left:14px;width:18px;height:18px;fill:none;stroke:rgba(255,255,255,.7);stroke-width:2;stroke-linecap:round;pointer-events:none;}
 .ord-search input{width:100%;height:100%;border:0;outline:0;background:transparent;color:#fff;font:500 16px var(--font-body);padding:0 40px 0 40px;border-radius:999px;-webkit-appearance:none;appearance:none;}
 .ord-search input::placeholder{color:rgba(255,255,255,.58);}
@@ -17,7 +17,7 @@
 
 /* ---------- Categories button ---------- */
 .ord-catpick{flex:0 0 auto;height:42px;display:inline-flex;align-items:center;gap:8px;padding:0 15px 0 12px;border:0;border-radius:999px;
-  background:#F6EFE4;color:var(--ink);font:700 14px var(--font-body);cursor:pointer;white-space:nowrap;}
+  background:#F6F2F0;color:var(--ink);font:700 14px var(--font-body);cursor:pointer;white-space:nowrap;}
 .ord-catpick svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;}
 .ord-catpick:active{transform:scale(.97);}
 .ord-catpick:disabled{opacity:.5;}
@@ -25,7 +25,7 @@
 /* ---------- Veg / Non-veg switches ---------- */
 .ord-diet-toggles{flex:1 1 100%;display:flex;gap:8px;}
 .ord-sw{--sw:#2FB36B;flex:1 1 0;min-width:0;height:38px;display:inline-flex;align-items:center;gap:8px;padding:0 10px 0 10px;border-radius:999px;
-  border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#DCE7E2;font:700 13.5px var(--font-body);cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#E9DEE4;font:700 13.5px var(--font-body);cursor:pointer;
   transition:background .18s,border-color .18s,color .18s;}
 .ord-sw[data-kind="nonveg"]{--sw:#EF5B61;}
 .ord-sw-mark{flex:0 0 auto;width:16px;height:16px;border:1.5px solid var(--sw);border-radius:3px;display:grid;place-items:center;background:#fff;}
@@ -37,7 +37,7 @@
 .ord-sw.on .ord-sw-track{background:var(--sw);}
 .ord-sw.on .ord-sw-track i{transform:translateX(14px);}
 .ord-sw:active{transform:scale(.98);}
-.ord-search:focus-within,.ord-catpick:focus-visible,.ord-sw:focus-visible{outline:2px solid #F6EFE4;outline-offset:2px;}
+.ord-search:focus-within,.ord-catpick:focus-visible,.ord-sw:focus-visible{outline:2px solid #F6F2F0;outline-offset:2px;}
 
 /* ---------- Category sheet ---------- */
 .ord-cat-sheet{z-index:21;}

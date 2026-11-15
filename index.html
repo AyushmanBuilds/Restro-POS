@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sip &amp; Scoop Cafe POS — Billing</title>
+<title>Atithya — Restaurant billing</title>
+<meta name="theme-color" content="#1E0C17">
+<link rel="icon" type="image/svg+xml" href="img/favicon.svg">
 <link rel="icon" type="image/png" href="img/icon.png">
+<link rel="apple-touch-icon" href="img/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Sora:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -12,6 +15,7 @@
 <link rel="stylesheet" href="dashboard.css">
 <link rel="stylesheet" href="pos-redesign.css">
 <link rel="stylesheet" href="staff-qr.css">
+<link rel="stylesheet" href="atithya.css">
 </head>
 <body>
 
@@ -22,8 +26,8 @@
      one tap here, then go fullscreen immediately. -->
 <div id="fsGate" class="fs-gate">
   <div class="fs-gate-card">
-    <img src="img/logo-full.png" alt="" class="fs-gate-logo">
-    <div class="fs-gate-title">Sip &amp; Scoop Cafe POS</div>
+    <img src="img/icon.png" alt="" class="fs-gate-logo">
+    <div class="fs-gate-title">Atithya</div>
     <div class="fs-gate-sub">Tap below to launch in full-screen POS mode</div>
     <button class="btn-primary" id="fsEnterBtn">⛶ Enter full-screen</button>
     <button class="fs-gate-skip" id="fsSkipBtn">Continue in browser window</button>
@@ -36,8 +40,8 @@
     <div class="brand-mark">
       <img src="img/icon.png" alt="" class="brand-icon-img">
       <div>
-        <div class="brand-name">Sip &amp; Scoop Cafe POS</div>
-        <div class="brand-tag">Billing for restaurants &amp; cafés</div>
+        <div class="brand-name">Atithya</div>
+        <div class="brand-tag">Hospitality, run beautifully.</div>
       </div>
     </div>
 
@@ -118,12 +122,12 @@
         <!-- HERO -->
         <header class="dx-hero">
           <svg class="dx-hero-art" viewBox="0 0 360 360" aria-hidden="true">
-            <defs><radialGradient id="dxPlate" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#D64526" stop-opacity=".26"/><stop offset="1" stop-color="#D64526" stop-opacity="0"/></radialGradient></defs>
+            <defs><radialGradient id="dxPlate" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#C4620A" stop-opacity=".26"/><stop offset="1" stop-color="#C4620A" stop-opacity="0"/></radialGradient></defs>
             <circle cx="180" cy="180" r="176" fill="url(#dxPlate)"/>
             <circle cx="180" cy="180" r="150" fill="none" stroke="#fff" stroke-opacity=".07"/>
             <circle cx="180" cy="180" r="116" fill="none" stroke="#fff" stroke-opacity=".08"/>
-            <circle cx="180" cy="180" r="82" fill="none" stroke="#E9B58F" stroke-opacity=".20"/>
-            <g fill="none" stroke="#F6EFE4" stroke-opacity=".34" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="180" cy="180" r="82" fill="none" stroke="#E8B04B" stroke-opacity=".20"/>
+            <g fill="none" stroke="#F6F2F0" stroke-opacity=".34" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M112 212h136"/><path d="M122 212a58 58 0 0 1 116 0"/><circle cx="180" cy="146" r="5"/><path d="M96 224h168" stroke-opacity=".18"/>
             </g>
           </svg>
@@ -159,7 +163,7 @@
         </section>
 
         <!-- KPIs -->
-        <div class="dx-card dx-kpi" style="--k:#D64526;--kt:#FCEAE4">
+        <div class="dx-card dx-kpi" style="--k:#C4620A;--kt:#FBEBD9">
           <div class="dx-kpi-top"><span class="dx-label">Bills generated</span><i class="dx-kpi-ico"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg></i></div>
           <div class="dx-kpi-val" id="statBills">0</div>
           <div class="dx-sub" id="statBillsSub">Completed today</div>

@@ -158,13 +158,13 @@ function setStaffLang(lang) {
   if ($("view-qrorder")?.classList.contains("active")) renderQrOrderingView();
 }
 function toggleStaffLang() { setStaffLang(staffLang === "hi" ? "en" : "hi"); }
-const STAFF_AVATAR_COLORS = ["#1B5E4A", "#0E7C7B", "#1C8A4B", "#B7791F", "#5B4FBE", "#C4293D", "#1D7BB8", "#2F8F6E"];
+const STAFF_AVATAR_COLORS = ["#6A1B45", "#0E7C7B", "#1C8A4B", "#B7791F", "#5B4FBE", "#C8302B", "#1D7BB8", "#8F2F64"];
 
 // PetPooja-style category tile colours — cycled in order, independent of how
 // many categories exist.
 const CAT_COLORS = [
-  "#1B5E4A", "#0E7C7B", "#1C8A4B", "#B7791F", "#5B4FBE",
-  "#C4293D", "#1D7BB8", "#B0562C", "#2F8F6E", "#8B4A9C",
+  "#6A1B45", "#0E7C7B", "#1C8A4B", "#B7791F", "#5B4FBE",
+  "#C8302B", "#1D7BB8", "#B06A2C", "#8F2F64", "#8B4A9C",
   "#C77B1E", "#3A6EA5", "#A13E6B", "#4F8A3D", "#B23B5E"
 ];
 function catColor(idx) { return CAT_COLORS[idx % CAT_COLORS.length]; }
@@ -202,26 +202,26 @@ const CAT_ART = [
   { m: ["ice cream", "icecream"],      e: ["🍨", "🍦", "🍧"], a: "#2E86C9", b: "#143F73" },
   { m: ["tea", "coffee"],              e: ["☕", "🫖", "🍂"], a: "#7A4A30", b: "#2E1A10" },
   { m: ["beverage", "drink", "juice"], e: ["🥤", "🧃", "🧊"], a: "#1F86B0", b: "#0B4663" },
-  { m: ["pizza"],                      e: ["🍕", "🧀", "🍅"], a: "#D2492E", b: "#7A1E10" },
-  { m: ["pasta"],                      e: ["🍝", "🍅", "🧄"], a: "#CC5A3A", b: "#74241A" },
+  { m: ["pizza"],                      e: ["🍕", "🧀", "🍅"], a: "#D27B2E", b: "#7A1E10" },
+  { m: ["pasta"],                      e: ["🍝", "🍅", "🧄"], a: "#CC7E3A", b: "#74241A" },
   { m: ["burger", "sandwich"],         e: ["🍔", "🍟", "🥬"], a: "#D98A2B", b: "#7A420B" },
-  { m: ["wrap", "roll"],               e: ["🌯", "🥙", "🌿"], a: "#C9803E", b: "#6E3714" },
+  { m: ["wrap", "roll"],               e: ["🌯", "🥙", "🌿"], a: "#C97F3E", b: "#6E3714" },
   { m: ["dessert", "sweet", "cake"],   e: ["🍰", "🍮", "🍫"], a: "#C4527F", b: "#6B2043" },
   { m: ["bakery", "snack"],            e: ["🥐", "🧁", "🍪"], a: "#C98F4F", b: "#744719" },
-  { m: ["soup"],                       e: ["🍲", "🥣", "🌿"], a: "#D9903E", b: "#85470F" },
+  { m: ["soup"],                       e: ["🍲", "🥣", "🌿"], a: "#D9903E", b: "#85460F" },
   { m: ["salad"],                      e: ["🥗", "🥬", "🍅"], a: "#3F9244", b: "#1B5527" },
   { m: ["bread", "naan", "roti"],      e: ["🫓", "🥖", "🧈"], a: "#C9A25A", b: "#745318" },
-  { m: ["non-veg", "nonveg", "non veg"], e: ["🍗", "🍖", "🍛"], a: "#A93E2C", b: "#5A1810" },
+  { m: ["non-veg", "nonveg", "non veg"], e: ["🍗", "🍖", "🍛"], a: "#A9662C", b: "#5A1810" },
   { m: ["veg"],                        e: ["🍛", "🥦", "🫛"], a: "#2F8352", b: "#15472B" },
   { m: ["rice", "biryani"],            e: ["🍚", "🍛", "🌿"], a: "#D5A63A", b: "#86600C" },
-  { m: ["noodle", "chinese"],          e: ["🍜", "🥡", "🥢"], a: "#C4462D", b: "#681C10" },
+  { m: ["noodle", "chinese"],          e: ["🍜", "🥡", "🥢"], a: "#C4732D", b: "#681C10" },
   { m: ["south indian"],               e: ["🥘", "🥥", "🌶️"], a: "#DDA13B", b: "#8F550B" },
-  { m: ["tandoor", "grill"],           e: ["🍢", "🔥", "🍗"], a: "#B94A2A", b: "#5C200F" },
+  { m: ["tandoor", "grill"],           e: ["🍢", "🔥", "🍗"], a: "#B96D2A", b: "#5C200F" },
   { m: ["combo", "thali"],             e: ["🍱", "🍛", "🥗"], a: "#BC8C30", b: "#6A480D" },
-  { m: ["starter", "appetizer"],       e: ["🍢", "🥟", "🌶️"], a: "#D6742A", b: "#7E3A0C" },
+  { m: ["starter", "appetizer"],       e: ["🍢", "🥟", "🌶️"], a: "#D67A2A", b: "#7E3A0C" },
   { m: ["side", "extra"],              e: ["🍟", "🥗", "🧂"], a: "#628F3C", b: "#335219" }
 ];
-const CAT_ART_DEFAULT = { e: ["🍽️", "✨", "🥢"], a: "#2A6F5C", b: "#10352B" };
+const CAT_ART_DEFAULT = { e: ["🍽️", "✨", "🥢"], a: "#6F2A50", b: "#351024" };
 function catArt(name) {
   const n = String(name || "").toLowerCase();
   // short keywords match at the start of a word only (so "tea" doesn't match "steak")
@@ -393,7 +393,7 @@ function showView(name) {
   const navBtn = document.querySelector(`.nav-item[data-view="${name}"]`);
   if (navBtn) navBtn.classList.add("active");
   const titleMap = { dashboard: "Dashboard", tables: "Tables & Orders", order: activeTable?.name || "Order", menu: "Menu Builder", kds: "Kitchen Display", reservations: "Reservations", qrorder: "QR Table Ordering", expenses: "Expenses & Cash", sales: "Sales Summary", bills: "Bill History", staff: "Staff Management", settings: "Settings" };
-  if ($("topbarTitle")) $("topbarTitle").textContent = titleMap[name] || "Sip & Scoop Cafe POS";
+  if ($("topbarTitle")) $("topbarTitle").textContent = titleMap[name] || "Atithya";
   if (notifiedTabs.has(name)) { notifiedTabs.delete(name); renderNavDots(); }
   closeSidebar();
   if ($("orderCartPanel")) $("orderCartPanel").classList.remove("open");
@@ -792,7 +792,7 @@ function renderDashboardHourChart(todaysBills, revenue, yBills) {
 
   const gy = (f) => (padT + f * (H - padT - padB)).toFixed(1);
   const grid = [0.25, 0.5, 0.75].map(f => `<line x1="0" x2="${W}" y1="${gy(f)}" y2="${gy(f)}" class="g"/>`).join("");
-  const defs = `<defs><linearGradient id="dxArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1B5E4A" stop-opacity=".32"/><stop offset="1" stop-color="#1B5E4A" stop-opacity="0"/></linearGradient></defs>`;
+  const defs = `<defs><linearGradient id="dxArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6A1B45" stop-opacity=".32"/><stop offset="1" stop-color="#6A1B45" stop-opacity="0"/></linearGradient></defs>`;
   const base = `<line x1="0" x2="${W}" y1="${H - padB}" y2="${H - padB}" class="base"/>`;
 
   const valsT = hours.map(h => byHour[h]), valsY = hours.map(h => byHourY[h]);
@@ -1590,7 +1590,7 @@ function qrCanvasFor(url, size) {
   holder.style.cssText = "position:fixed;left:-9999px;top:0;";
   document.body.appendChild(holder);
   try {
-    new QRCode(holder, { text: url, width: size, height: size, colorDark: "#0D1E19", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+    new QRCode(holder, { text: url, width: size, height: size, colorDark: "#1E0C17", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
     return holder.querySelector("canvas");
   } finally { holder.remove(); }
 }
@@ -1605,10 +1605,10 @@ function qrStickerDataUrl(table, size = 640) {
   const x = c.getContext("2d");
   x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
   x.drawImage(qr, pad, pad, size, size);
-  x.fillStyle = "#0D1E19"; x.textAlign = "center";
+  x.fillStyle = "#1E0C17"; x.textAlign = "center";
   x.font = `700 ${Math.round(size * 0.085)}px 'Bricolage Grotesque','Sora',Arial,sans-serif`;
   x.fillText("Table " + table.name, W / 2, pad + size + Math.round(cap * 0.5), W - pad);
-  x.fillStyle = "#66726C";
+  x.fillStyle = "#7E7078";
   x.font = `600 ${Math.round(size * 0.048)}px Inter,Arial,sans-serif`;
   x.fillText("Scan to order", W / 2, pad + size + Math.round(cap * 0.82));
   return c.toDataURL("image/png");
@@ -1642,7 +1642,7 @@ function renderQrTableGrid() {
           </div>
         </article>`).join("");
       tablesCache.forEach(tb => {
-        if (window.QRCode) new QRCode($(`qrbox-${tb.id}`), { text: qrUrlFor(tb), width: 150, height: 150, colorDark: "#0D1E19", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+        if (window.QRCode) new QRCode($(`qrbox-${tb.id}`), { text: qrUrlFor(tb), width: 150, height: 150, colorDark: "#1E0C17", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
       });
     }
   }
@@ -1688,8 +1688,8 @@ $("qrPrintAllBtn").onclick = () => {
   }).join("");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Table QR codes — ${escapeHtml(restoData?.name || "")}</title>
     <style>
-      *{box-sizing:border-box}body{margin:0;padding:18px;font-family:Inter,Arial,sans-serif;color:#0D1E19}
-      h1{font-size:15px;margin:0 0 14px;font-weight:600;color:#66726C}
+      *{box-sizing:border-box}body{margin:0;padding:18px;font-family:Inter,Arial,sans-serif;color:#1E0C17}
+      h1{font-size:15px;margin:0 0 14px;font-weight:600;color:#7E7078}
       .g{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
       figure{margin:0;border:1.5px dashed #bbb;border-radius:14px;padding:10px;break-inside:avoid;text-align:center}
       img{width:100%;max-width:340px;height:auto}
@@ -2658,8 +2658,8 @@ const ATT_META = {
   present: { label: "Present", color: "#12995A" },
   halfday: { label: "Half-day", color: "#D49A12" },
   leave: { label: "Leave", color: "#2B79B5" },
-  absent: { label: "Absent", color: "#C4293D" },
-  none: { label: "Not marked", color: "#B6AE9B" },
+  absent: { label: "Absent", color: "#C8302B" },
+  none: { label: "Not marked", color: "#B0A1A7" },
 };
 let staffFilter = { q: "", role: "", status: "all" };
 
@@ -2917,7 +2917,7 @@ function renderStaffGrid() {
   sel.value = staffFilter.role;
 
   // status chips
-  const chips = [["all", "All", staffCache.length, "#1B5E4A"], ["present", "Present", counts.present, ATT_META.present.color], ["halfday", "Half-day", counts.halfday, ATT_META.halfday.color],
+  const chips = [["all", "All", staffCache.length, "#6A1B45"], ["present", "Present", counts.present, ATT_META.present.color], ["halfday", "Half-day", counts.halfday, ATT_META.halfday.color],
     ["leave", "Leave", counts.leave, ATT_META.leave.color], ["absent", "Absent", counts.absent, ATT_META.absent.color], ["none", "Not marked", counts.none, ATT_META.none.color]];
   $("staffFilterChips").innerHTML = chips.map(([k, label, n, c]) =>
     `<button type="button" class="sf-chip${staffFilter.status === k ? " on" : ""}" data-chip="${k}" style="--c:${c}"><i></i>${label}<em>${n}</em></button>`).join("");
@@ -3263,7 +3263,7 @@ function buildTrendChart(values, { viewW = 600, viewH = 190, color = "var(--prim
 
 function buildColumnChart(values, labels = []) {
   const n = values.length, max = Math.max(1, ...values);
-  const pal = ["#1B5E4A", "#0E7C7B", "#D9A21B", "#1C8A4B", "#58384F", "#2F6FB5", "#B8472B"];
+  const pal = ["#6A1B45", "#0E7C7B", "#D9A21B", "#1C8A4B", "#58384F", "#2F6FB5", "#B86D2B"];
   const short = (v) => v >= 100000 ? (v / 100000).toFixed(1).replace(/\.0$/, "") + "L" : v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(Math.round(v));
   const grid = [100, 75, 50, 25, 0].map(p => `<span style="bottom:${p}%"><i>₹${short(max * p / 100)}</i></span>`).join("");
   const cols = values.map((v, i) => {
@@ -3616,7 +3616,7 @@ document.querySelectorAll("#payModeToggle .pm-btn").forEach(b => {
 
 function renderCart() {
   const list = $("cartList");
-  if (!cart.length) { list.innerHTML = `<div class="empty-note" style="color:#9C9384;">No items yet — tap a menu item to add.</div>`; }
+  if (!cart.length) { list.innerHTML = `<div class="empty-note" style="color:#9A868E;">No items yet — tap a menu item to add.</div>`; }
   else {
     list.innerHTML = cart.map((c, idx) => `
       <div class="cart-item">
@@ -4119,7 +4119,7 @@ function buildThermalHTML(b) {
     <div class="tb-row tb-bold tb-total"><span>TOTAL</span><span>${money(b.total)}</span></div>
     <hr>
     <div class="tb-center">${b.footer || "Thank you, visit again!"}</div>
-    <div class="tb-center tb-note">Billed via Sip &amp; Scoop Cafe POS</div>
+    <div class="tb-center tb-note">Billed via Atithya</div>
   `;
 }
 
@@ -4272,7 +4272,7 @@ async function buildBillImage(b) {
   if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) { /* ignore */ } }
   const W = 380, P = 22, S = 2;
   const FONT = 'Inter, "Segoe UI", "Nirmala UI", Roboto, Arial, sans-serif';
-  const INK = "#161A23", MUTED = "#6B7280", BRAND = "#1B5E4A", LINE = "#C9C2B0";
+  const INK = "#1D1519", MUTED = "#6E6468", BRAND = "#6A1B45", LINE = "#C2B7BC";
   const created = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date();
   const pay = { cash: "Cash", card: "Card", upi: "UPI" }[b.paymentMode] || b.paymentMode || "";
 
@@ -4336,7 +4336,7 @@ async function buildBillImage(b) {
     row(`SGST (${b.sgstPct}%)`, money(b.sgst));
     y += 4;
     // total band
-    ctx.fillStyle = "#E2EFE8"; ctx.beginPath();
+    ctx.fillStyle = "#F4E6EC"; ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(P - 8, y - 2, W - 2 * P + 16, 38, 10); else ctx.rect(P - 8, y - 2, W - 2 * P + 16, 38);
     ctx.fill();
     y += 8; row("TOTAL", money(b.total), { size: 18, weight: 800, color: BRAND }); y += 6;
@@ -4686,10 +4686,10 @@ $("saveSettingsBtn").onclick = async () => {
   .dp-keyrow,.dp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
   .dp-keyrow input{flex:1 1 220px;min-width:0;margin:0 !important;}
   .dp-actions{margin-top:10px;}
-  .dp-status{font-size:12.5px;font-weight:700;color:var(--primary-deep,#1b5e4a);margin-left:auto;}
+  .dp-status{font-size:12.5px;font-weight:700;color:var(--primary-deep,#6A1B45);margin-left:auto;}
   .dp-list{padding:6px 20px 20px;}
   .dp-row{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:flex-start;}
-  .dp-th{flex:0 0 76px;width:76px;height:76px;border-radius:14px;overflow:hidden;background:var(--surface-2,#f3efe8);display:grid;place-items:center;font-size:26px;}
+  .dp-th{flex:0 0 76px;width:76px;height:76px;border-radius:14px;overflow:hidden;background:var(--surface-2,#F0EBED);display:grid;place-items:center;font-size:26px;}
   .dp-th img{width:100%;height:100%;object-fit:cover;display:block;}
   .dp-mid{flex:1;min-width:0;}
   .dp-mid b{display:block;font-size:14px;}
@@ -4698,7 +4698,7 @@ $("saveSettingsBtn").onclick = async () => {
   .dp-qrow input{flex:1;min-width:0;margin:0 !important;padding:7px 10px !important;font-size:13px !important;}
   .dp-ctl{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;}
   .dp-ctl .dp-n{font-size:12px;color:var(--muted);min-width:70px;text-align:center;}
-  .dp-row.dirty .dp-th{outline:2px solid var(--primary,#1b5e4a);}
+  .dp-row.dirty .dp-th{outline:2px solid var(--primary,#6A1B45);}
   .dp-row button{font-size:12px;padding:6px 10px;}
   `;
   document.head.appendChild(st);

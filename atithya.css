@@ -1,0 +1,89 @@
+/* =====================================================================
+   ATITHYA — brand layer + dashboard polish
+   Load LAST on both pages (index.html after staff-qr.css, order.html after
+   order-dish.css). Additive only: remove this <link> to drop the polish.
+   Palette — Jamun & Brass
+     jamun #6A1B45 · jamun-deep #3F0F2A · aubergine-black #1E0C17
+     brass #E8B04B · ember #C4620A · pearl #F6F2F0 · plum-ink #1D1519
+   ===================================================================== */
+
+:root{
+  --atithya-jamun:#6A1B45;
+  --atithya-jamun-deep:#3F0F2A;
+  --atithya-night:#1E0C17;
+  --atithya-brass:#E8B04B;
+  --atithya-ember:#C4620A;
+  --atithya-pearl:#F6F2F0;
+  --atithya-shadow:58,16,38;          /* rgb of the shadow tint */
+}
+::selection{background:rgba(106,27,69,.18);}
+:focus-visible{outline-color:var(--atithya-jamun);}
+
+/* ---------- Customer order page: duotone the hero photo into the palette ---------- */
+.ord-hero::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:linear-gradient(135deg,#8B2D5E 0%,#3F0F2A 100%);mix-blend-mode:color;
+}
+.ord-credit{letter-spacing:.01em;}
+
+/* ---------- Dashboard ---------- */
+#view-dashboard{
+  --dx-gold:var(--atithya-brass);
+  --dx-ink:var(--atithya-night);
+}
+
+/* calmer entrance: shorter travel, same stagger */
+@keyframes dxIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.dx > *{animation-duration:.38s;}
+
+/* cards: plum-tinted depth, a clear size hierarchy instead of one radius everywhere */
+.dx-card{
+  border-color:#EDE4E8;border-radius:22px;
+  box-shadow:0 1px 2px rgba(var(--atithya-shadow),.05),0 10px 26px -12px rgba(var(--atithya-shadow),.12);
+}
+.dx-card:hover{
+  box-shadow:0 2px 4px rgba(var(--atithya-shadow),.06),0 18px 38px -14px rgba(var(--atithya-shadow),.22);
+}
+.dx-kpi{border-radius:20px;}
+.dx-card-head h2{letter-spacing:-.015em;}
+.dx-label{color:#7A6A73;}
+
+/* hero: the one memorable surface — jamun field, brass light from the corner */
+.dx-hero{
+  border-radius:30px;
+  background:
+    radial-gradient(70% 120% at 100% 0%,rgba(232,176,75,.26),transparent 56%),
+    radial-gradient(70% 110% at 0% 115%,rgba(176,71,127,.34),transparent 62%),
+    linear-gradient(135deg,#2A0F20 0%,#5A173A 100%);
+  box-shadow:0 28px 54px -22px rgba(63,15,42,.72),inset 0 1px 0 rgba(255,255,255,.10);
+}
+.dx-hero h1{font-weight:500;letter-spacing:-.035em;}
+.dx-hero p{color:#D9C6D0;}
+.dx-eyebrow{color:#F3DDE8;}
+.dx-ghost-btn{color:var(--atithya-jamun-deep);background:var(--atithya-pearl);}
+.dx-act.primary{
+  background:linear-gradient(135deg,#E07B16,#B35405);
+  box-shadow:0 12px 26px -8px rgba(196,98,10,.7);
+}
+.dx-act.primary:hover{box-shadow:0 16px 30px -8px rgba(196,98,10,.85);}
+.dx-chip.hot{background:rgba(232,176,75,.2);border-color:rgba(232,176,75,.5);}
+.dx-chip.hot i{background:var(--atithya-brass);}
+
+/* today's takings: big serif figure in deep jamun */
+.dx-rev{background:linear-gradient(180deg,#fff 0%,#F8F1F4 100%);}
+.dx-rev-value{color:var(--atithya-jamun-deep);font-weight:500;}
+.dx-spark .ln{stroke:var(--atithya-jamun);}
+.dx-spark-dot{background:var(--atithya-jamun);box-shadow:0 2px 8px rgba(106,27,69,.45);}
+
+/* KPI figures */
+.dx-kpi-val{font-weight:500;color:var(--atithya-night);}
+.dx-kpi::before{height:3px;opacity:1;}
+
+/* pills + links */
+.dx-pill{background:#FBF8F7;border-color:#EDE4E8;color:#7A6A73;}
+.dx-link{color:var(--atithya-jamun);}
+
+@media (prefers-reduced-motion:reduce){
+  .dx > *{animation:none;}
+  .dx-card{transition:none;}
+}
