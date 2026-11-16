@@ -655,6 +655,11 @@ function attachListeners() {
     checkoutReqCache = allCalls.filter(o => o.type === "checkout");
     waiterCallsCache = allCalls.filter(o => o.type !== "checkout");
     renderDashboardLive();
+    renderCheckoutPanel();
+    if (checkoutReqCache.some(o => !prevIds.has(o.id)) && waiterCallsInitialLoadDone) {
+      const nr = checkoutReqCache.filter(o => !prevIds.has(o.id)).pop();
+      toast(`Table ${nr.tableName} is checking out — please prepare the GST bill`, 6000);
+    }
     const hasNewArrival = allCalls.some(o => !prevIds.has(o.id));
     if ($("view-qrorder").classList.contains("active")) renderQrOrderingView();
     if (hasNewArrival && waiterCallsInitialLoadDone) { playNotifSound("waiter"); notifyTab("qrorder"); }

@@ -228,11 +228,11 @@ function chooseMethod(m) {
     const b = loadCheckout();
     addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
       tableName, floor: tableFloor, seatLabels: ((b && b.seats) || []).map(s => s.toLowerCase()),
-      type: "checkout", payMethod: "upi",
+      type: "checkout",
       note: "Checkout — please prepare the GST bill (guest will pay by UPI)",
       status: "pending", createdAt: serverTimestamp()
     }).then(() => { try { localStorage.setItem(BILLREQ_KEY, "1"); } catch (e) {} })
-      .catch(e => console.warn("Couldn't send the bill request to staff", e));
+      .catch(e => console.error("Couldn't send the bill request to staff", e && e.code, e));
   }
   renderPayCards();
 }
