@@ -5,19 +5,14 @@
    Additive only: remove the <link> to drop the styling.
    ===================================================================== */
 
-/* ---------- Fonts for Hindi / Odia (Latin text keeps Inter / Sora) ---------- */
+/* ---------- Font for Hindi (Latin text keeps Inter / Sora) ---------- */
 html[data-lang="hi"]{
   --font-body:'Inter','Noto Sans Devanagari',-apple-system,BlinkMacSystemFont,sans-serif;
   --font-display:'Sora','Noto Sans Devanagari',sans-serif;
 }
-html[data-lang="or"]{
-  --font-body:'Inter','Noto Sans Oriya',-apple-system,BlinkMacSystemFont,sans-serif;
-  --font-display:'Sora','Noto Sans Oriya',sans-serif;
-}
 /* The old built-in Hindi lines would duplicate the selected language, so hide them
-   whenever Hindi or Odia is chosen (English keeps the original bilingual look). */
-html[data-lang="hi"] body [lang="hi"],
-html[data-lang="or"] body [lang="hi"]{display:none !important;}
+   whenever Hindi is chosen (English keeps the original bilingual look). */
+html[data-lang="hi"] body [lang="hi"]{display:none !important;}
 
 /* ---------- Language switcher ---------- */
 .zi-lang{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:rgba(30,12,23,.62);
@@ -128,3 +123,43 @@ html[data-lang="or"] body [lang="hi"]{display:none !important;}
 .pp-act button:disabled{opacity:.55;cursor:wait;}
 @keyframes ppIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.pp{animation:none;}}
+
+/* ---------- payment method flow (customer bill screen) ---------- */
+.zp h2{margin:0 0 12px;font:700 17px/1.3 var(--font-display);color:var(--ink,#1D1519);text-align:left;}
+.zp h2 .hi{display:block;margin-top:2px;font-size:14px;font-weight:600;color:var(--muted,#6E6468);}
+.zp-methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.zp-methods button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:16px 6px 14px;border-radius:16px;cursor:pointer;
+  background:var(--surface-2,#F8F4F6);border:1.5px solid var(--line,#E7DEE0);color:var(--ink,#1D1519);font-family:var(--font-body);
+  transition:border-color .15s,background .15s,transform .12s;}
+.zp-methods button i{font-style:normal;font-size:28px;line-height:1;margin-bottom:4px;}
+.zp-methods button b{font-size:14.5px;font-weight:800;}
+.zp-methods button small{font-size:11px;font-weight:600;line-height:1.3;color:var(--muted,#6E6468);}
+.zp-methods button:hover{border-color:var(--primary,#5E1B40);background:#fff;}
+.zp-methods button:active{transform:scale(.97);}
+.zp-methods button:focus-visible{outline:2px solid var(--primary,#5E1B40);outline-offset:2px;}
+.zp-break{margin-top:10px;padding:8px 0 0;border-top:1px dashed var(--line,#E7DEE0);}
+.zp-row{display:flex;justify-content:space-between;font-size:13px;line-height:1.75;color:var(--muted,#6E6468);font-variant-numeric:tabular-nums;}
+.zp-apps{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.zp-app{display:flex;align-items:center;justify-content:center;height:48px;border-radius:12px;text-decoration:none;
+  background:var(--surface,#fff);border:1.5px solid var(--primary,#5E1B40);color:var(--primary-deep,#3F0F2A);font:800 13.5px var(--font-body);}
+.zp-app:active{transform:scale(.98);background:var(--primary-tint,#F3ECF0);}
+.zp-formal{margin:12px 0 0;font-size:13.5px;line-height:1.55;color:var(--ink,#1D1519);text-align:left;}
+.zp-formal span{display:block;}
+.zp-formal .hi{margin-top:4px;color:var(--primary-deep,#3F0F2A);font-weight:600;}
+.zp-badge{display:inline-block;margin:12px 0 0;padding:5px 12px;border-radius:999px;background:#E4F6EC;color:#0F7A44;font:700 12px var(--font-body);}
+.zp-badge span::before{content:"✓ ";}
+.zp-free{margin:12px 0 0;font-size:14px;font-weight:700;line-height:1.45;color:#14683F;}
+.zp-free span{display:block;}
+.zp-free .hi{margin-top:2px;font-weight:600;}
+.zp-change{display:block;margin:12px auto 0;padding:6px 10px;border:0;background:none;cursor:pointer;
+  font:700 13px var(--font-body);color:var(--primary,#5E1B40);text-decoration:underline;}
+.zp-steps{display:flex;justify-content:space-between;gap:6px;list-style:none;margin:0 0 14px;padding:0;}
+.zp-steps li{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted,#6E6468);text-align:center;}
+.zp-steps i{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:800;background:#EFE8EB;color:#6E6468;}
+.zp-steps li.now{color:var(--primary-deep,#3F0F2A);}
+.zp-steps li.now i{background:var(--primary,#5E1B40);color:#fff;}
+.zp-steps li.done i{background:#2FB36B;color:#fff;}
+
+/* staff payment popup — amount to verify against the soundbox */
+.pp-amt{margin-top:2px;font:800 24px/1.15 var(--font-display,'Sora',sans-serif);color:#3F0F2A;font-variant-numeric:tabular-nums;}
+.pp-main small b{color:#1E0C17;}

@@ -107,17 +107,86 @@ function watchPayment(b) {
     }, () => {});
   });
 }
+// ---- Payment method the guest picked (kept across reloads) ----
+// Cash / Card  -> reception instructions + staff popup "Payment received"
+// UPI          -> final bill with GST, pick an app, "I've paid", staff verify on the soundbox, then confirm
+const PAYM_KEY = `zs_paymethod_${restoId}_${tableName}`;
+let payMethod = null;
+try { payMethod = localStorage.getItem(PAYM_KEY) || null; } catch (e) {}
+const payPushed = new Set();
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+function upiQuery(p) {
+  return "pa=" + encodeURIComponent(p.upiId || "") +
+    "&pn=" + encodeURIComponent(p.payeeName || "") +
+    "&am=" + (Math.round((Number(p.amount) || 0) * 100) / 100).toFixed(2) +
+    "&cu=INR&tn=" + encodeURIComponent("Bill " + (p.billNo || ""));
+}
+function appButtons(p) {
+  const q = upiQuery(p);
+  return [
+    ["Google Pay", (IS_IOS ? "gpay://upi/pay?" : "tez://upi/pay?") + q],
+    ["PhonePe", "phonepe://pay?" + q],
+    ["Paytm", "paytmmp://pay?" + q],
+    ["Other UPI app", "upi://pay?" + q]
+  ].map(a => `<a class="zp-app" href="${escapeHtml(a[1])}">${a[0]}</a>`).join("");
+}
+function breakdownHtml(p) {
+  if (p.subtotal == null) return "";
+  const row = (l, v) => `<div class="zp-row"><span>${l}</span><span>${v}</span></div>`;
+  return `<div class="zp-break">${row("Subtotal", money(p.subtotal))}` +
+    (p.discount > 0 ? row("Discount", "− " + money(p.discount)) : "") +
+    (p.cgst > 0 ? row(`CGST (${p.cgstPct}%)`, money(p.cgst)) : "") +
+    (p.sgst > 0 ? row(`SGST (${p.sgstPct}%)`, money(p.sgst)) : "") + `</div>`;
+}
+function stepsHtml(n) {
+  return `<ol class="zp-steps">` + ["Choose app", "Pay", "Cafe confirms"].map((s, i) =>
+    `<li class="${i + 1 < n ? "done" : i + 1 === n ? "now" : ""}"><i>${i + 1 < n ? "✓" : i + 1}</i><span>${s}</span></li>`).join("") + `</ol>`;
+}
+function methodPickerHtml() {
+  return `<section class="zp zp-pick">
+    <h2><span>How would you like to pay?</span><span class="hi" lang="hi">आप भुगतान कैसे करना चाहेंगे?</span></h2>
+    <div class="zp-methods">
+      <button type="button" data-method="cash"><i aria-hidden="true">💵</i><b>Cash</b><small>Pay at reception</small></button>
+      <button type="button" data-method="card"><i aria-hidden="true">💳</i><b>Card</b><small>Pay at reception</small></button>
+      <button type="button" data-method="upi"><i aria-hidden="true">📱</i><b>UPI</b><small>Pay on your phone</small></button>
+    </div></section>`;
+}
+function waitingBillHtml() {
+  return `<section class="zp zp-wait" role="status"><div class="zp-spin" aria-hidden="true"></div><b>Preparing your final bill…</b><small>Your total including GST will appear here in a moment.</small></section>`;
+}
+function receptionHtml(m, p) {
+  const card = m === "card";
+  const label = card ? "Card" : "Cash";
+  const hi = card ? "कार्ड" : "नकद";
+  const amt = p
+    ? `<div class="zp-head"><span>Amount payable (incl. GST)</span><b>${money(p.amount || 0)}</b></div>${breakdownHtml(p)}${p.billNo ? `<p class="zp-hint">Bill #${escapeHtml(p.billNo)}</p>` : ""}`
+    : `<p class="zp-hint">Your final amount, inclusive of GST, will appear here once the cashier prepares your bill.</p>`;
+  const msg = card
+    ? "Kindly proceed to the Reception to settle your bill by Card. Please present this screen to our cashier. Thank you for dining with us."
+    : "Kindly proceed to the Reception to settle your bill by Cash. Please present this screen to our cashier. Thank you for dining with us.";
+  return `<section class="zp zp-rcp">
+    <h2><span>${card ? "Payment by Card" : "Payment by Cash"}</span><span class="hi" lang="hi">${hi} द्वारा भुगतान</span></h2>
+    ${amt}
+    <p class="zp-formal"><span>${msg}</span><span class="hi" lang="hi">कृपया ${hi} द्वारा भुगतान के लिए रिसेप्शन पर पधारें और यह स्क्रीन कैशियर को दिखाएँ। हमारे साथ भोजन करने के लिए धन्यवाद।</span></p>
+    ${p && p.status === "counter" ? `<p class="zp-badge"><span>Reception has been notified</span></p>` : ""}
+  </section>`;
+}
 function payCardHtml(p) {
   const amt = money(p.amount || 0);
   const ref = p.billNo ? ` · <span>Bill #${escapeHtml(p.billNo)}</span>` : "";
-  if (p.status === "paid") return `<section class="zp zp-paid" role="status"><div class="zp-check" aria-hidden="true">✓</div><b>Payment received — thank you!</b><small><span>${amt}</span>${ref}</small></section>`;
-  if (p.status === "claimed") return `<section class="zp zp-wait" role="status"><div class="zp-spin" aria-hidden="true"></div><b>Waiting for the cafe to confirm your payment…</b><small>This usually takes a few seconds.</small></section>`;
-  const link = upiLink(p);
+  if (p.status === "paid") return `<section class="zp zp-paid" role="status"><div class="zp-check" aria-hidden="true">✓</div><b>Payment received — thank you!</b><small><span>${amt}</span>${ref}</small><p class="zp-free"><span>You're all set and free to leave. We hope to see you again!</span><span class="hi" lang="hi">आप जा सकते हैं। फिर पधारिएगा!</span></p></section>`;
+  if (payMethod !== "upi") return receptionHtml(payMethod, p);
+  if (!p.upiId) return `<p class="zp-warn">Online payment isn't available at this café. Please pay at the Reception.</p>` + receptionHtml("cash", p);
+  if (p.status === "claimed") return `<section class="zp zp-wait" role="status">${stepsHtml(3)}<div class="zp-spin" aria-hidden="true"></div><b>Waiting for the cafe to confirm your payment…</b><small>This usually takes a few seconds.</small><p class="zp-hint"><span>Please keep this screen open.</span></p></section>`;
+  const link = "upi://pay?" + upiQuery(p);
   return `<section class="zp">
-    <div class="zp-head"><span>Final bill (incl. taxes)</span><b>${amt}</b></div>
+    ${stepsHtml(1)}
+    <div class="zp-head"><span>Final bill (incl. GST)</span><b>${amt}</b></div>
+    ${breakdownHtml(p)}
     ${p.note === "not_found" ? `<p class="zp-warn">We couldn't find your payment yet. Please try again or pay at the reception.</p>` : ""}
-    <a class="zp-pay" href="${escapeHtml(link)}">Pay ${amt} with UPI</a>
-    <p class="zp-hint">Pay using any UPI app. The amount is filled in for you.</p>
+    <p class="zp-hint">Choose your payment app. The amount is filled in for you.</p>
+    <div class="zp-apps">${appButtons(p)}</div>
     <details><summary>Show QR to pay from another phone</summary><div class="zp-qr" data-qr="${escapeHtml(link)}"></div></details>
     <button type="button" class="zp-done" data-claim="${escapeHtml(p.id)}">I've paid</button>
   </section>`;
@@ -125,18 +194,55 @@ function payCardHtml(p) {
 function renderPayCards() {
   const host = $("upiPay"); if (!host) return;
   const list = Object.values(payBills);
-  const wasOpen = host.querySelector("details") && host.querySelector("details").open;
-  host.innerHTML = list.map(payCardHtml).join("");
   const allPaid = list.length > 0 && list.every(p => p.status === "paid");
-  const reception = document.querySelector(".ord-pay-card");
-  if (reception) reception.style.display = allPaid ? "none" : "";
+  const claimed = list.some(p => p.status === "claimed");
+  const wasOpen = host.querySelector("details") && host.querySelector("details").open;
+  let html;
+  if (allPaid) html = list.map(payCardHtml).join("");
+  else if (!payMethod) html = methodPickerHtml();
+  else if (!list.length) html = payMethod === "upi" ? waitingBillHtml() : receptionHtml(payMethod, null);
+  else html = list.map(payCardHtml).join("");
+  if (payMethod && !allPaid && !claimed) html += `<button type="button" class="zp-change" data-change>Change payment method</button>`;
+  host.innerHTML = html;
+  if (list.length) $("billAmount").textContent = money(list.reduce((s, p) => s + (Number(p.amount) || 0), 0));
   host.querySelectorAll("[data-qr]").forEach(el => {
     if (!window.QRCode) return;
     try { new QRCode(el, { text: el.dataset.qr, width: 176, height: 176, colorDark: "#1E0C17", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M }); } catch (e) {}
   });
   const d = host.querySelector("details"); if (d && wasOpen) d.open = true;
   host.querySelectorAll("[data-claim]").forEach(btn => { btn.onclick = () => claimPaid(btn.dataset.claim, btn); });
+  host.querySelectorAll("[data-method]").forEach(btn => { btn.onclick = () => chooseMethod(btn.dataset.method); });
+  host.querySelectorAll("[data-change]").forEach(btn => { btn.onclick = () => { payMethod = null; try { localStorage.removeItem(PAYM_KEY); } catch (e) {} renderPayCards(); }; });
+  syncMethodToRequests(list);
 }
+function chooseMethod(m) {
+  payMethod = m;
+  try { localStorage.setItem(PAYM_KEY, m); } catch (e) {}
+  const b = loadCheckout();
+  addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
+    tableName, floor: tableFloor, seatLabels: ((b && b.seats) || []).map(s => s.toLowerCase()),
+    type: "checkout", payMethod: m,
+    note: m === "upi" ? "Checkout — guest will pay by UPI · please generate the bill" : `Checkout — guest will pay by ${m.toUpperCase()} at reception`,
+    status: "pending", createdAt: serverTimestamp()
+  }).catch(e => console.warn("Couldn't notify staff of payment method", e));
+  renderPayCards();
+}
+// Tell the POS which method the guest picked: cash/card -> reception popup for staff; upi -> clears that popup.
+function syncMethodToRequests(list) {
+  if (!payMethod) return;
+  list.forEach(p => {
+    if (p.status === "paid" || p.status === "claimed") return;
+    let patch = null;
+    if (payMethod !== "upi" && (p.status !== "counter" || p.method !== payMethod)) patch = { method: payMethod, status: "counter", ack: false };
+    else if (payMethod === "upi" && (p.status === "counter" || p.method !== "upi")) patch = { method: "upi", status: "awaiting", ack: true };
+    if (!patch) return;
+    const k = p.id + ":" + payMethod + ":" + p.status;
+    if (payPushed.has(k)) return;
+    payPushed.add(k);
+    updateDoc(doc(db, "restaurants", restoId, "payRequests", p.id), patch).catch(e => console.warn(e));
+  });
+}
+
 async function claimPaid(id, btn) {
   btn.disabled = true;
   try {
@@ -1238,6 +1344,7 @@ function finishCheckout() {
     orderIds: loadTracked().map(x => x.id)
   };
   try { localStorage.setItem(CHECKOUT_KEY, JSON.stringify(snap)); } catch (e) {}
+  payMethod = null; try { localStorage.removeItem(PAYM_KEY); } catch (e) {}
   sessionEnded = true;
 
   // shut down everything that could lead back to ordering
@@ -1251,7 +1358,7 @@ function finishCheckout() {
   // heads-up for staff (best effort — the bill screen works even if this fails)
   addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
     tableName, floor: tableFloor, seatLabels: bill.seats.map(s => s.toLowerCase()),
-    type: "checkout", note: "Checkout — guest will pay at reception",
+    type: "checkout", note: "Checkout — guest is choosing how to pay",
     status: "pending", createdAt: serverTimestamp()
   }).catch(e => console.warn("Couldn't notify staff of checkout", e));
 
@@ -1264,6 +1371,7 @@ function finishCheckout() {
 
 function renderBill(b) {
   watchPayment(b);
+  renderPayCards();
   $("billRestoName").textContent = b.restoName || $("restoName").textContent || "Bill";
   $("billTableLabel").textContent = b.tableName || tableName;
   $("billAmount").textContent = money(b.total || 0);

@@ -1,5 +1,5 @@
 /* =====================================================================
-   ATITHYA — customer language switcher: English / हिन्दी / ଓଡ଼ିଆ
+   ATITHYA — customer language switcher: English / हिन्दी
    Load on order.html BEFORE order.js (plain <script>, not a module).
 
    How it works (nothing in your ordering logic changes):
@@ -8,15 +8,14 @@
    - Menu items: uses the Hindi / Odia name the owner typed in the item
      editor (name_hi / name_or). If blank, common dishes are translated
      from the built-in glossary below. Anything unknown stays English.
-   - Review the Odia text with a native speaker before you go live.
    ===================================================================== */
 (function () {
   "use strict";
 
   var KEY = "ord_lang";
-  var LANGS = [["en", "EN"], ["hi", "हिं"], ["or", "ଓଡ଼ି"]];
-  var LANG_NAMES = { en: "English", hi: "हिन्दी", or: "ଓଡ଼ିଆ" };
-  var IDX = { hi: 0, or: 1 };
+  var LANGS = [["en", "EN"], ["hi", "हिं"]];
+  var LANG_NAMES = { en: "English", hi: "हिन्दी" };
+  var IDX = { hi: 0 };
 
   /* ---------------------------------------------------------------
      1. UI TEXT  — English : [Hindi, Odia]
@@ -166,6 +165,34 @@
     "We couldn't find your payment yet. Please try again or pay at the reception.": ["हमें आपका भुगतान अभी नहीं मिला। कृपया दोबारा कोशिश करें या रिसेप्शन पर भुगतान करें।", "ଆମକୁ ଆପଣଙ୍କ ଦେୟ ଏପର୍ଯ୍ୟନ୍ତ ମିଳିଲା ନାହିଁ। ଦୟାକରି ପୁଣି ଚେଷ୍ଟା କରନ୍ତୁ କିମ୍ବା ରିସେପ୍ସନରେ ଦେୟ ଦିଅନ୍ତୁ।"],
     "Couldn't send that — please tell the cashier.": ["यह भेजा नहीं जा सका — कृपया कैशियर को बताएँ।", "ଏହା ପଠାଯାଇପାରିଲା ନାହିଁ — ଦୟାକରି କ୍ୟାସିଅରଙ୍କୁ କୁହନ୍ତୁ।"],
 
+    /* payment method flow */
+    "How would you like to pay?": ["आप भुगतान कैसे करना चाहेंगे?", "ଆପଣ କିପରି ଦେୟ ଦେବେ?"],
+    "Cash": ["नकद", "ନଗଦ"],
+    "Card": ["कार्ड", "କାର୍ଡ"],
+    "UPI": ["UPI", "UPI"],
+    "Pay at reception": ["रिसेप्शन पर भुगतान", "ରିସେପ୍ସନରେ ଦେୟ"],
+    "Pay on your phone": ["फ़ोन से भुगतान", "ଫୋନରେ ଦେୟ"],
+    "Preparing your final bill…": ["आपका अंतिम बिल तैयार हो रहा है…", "ଆପଣଙ୍କ ଅନ୍ତିମ ବିଲ୍ ପ୍ରସ୍ତୁତ ହେଉଛି…"],
+    "Your total including GST will appear here in a moment.": ["GST सहित आपकी कुल राशि कुछ ही क्षण में यहाँ दिखेगी।", "GST ସହିତ ଆପଣଙ୍କ ମୋଟ ରାଶି କିଛି ସମୟରେ ଏଠାରେ ଦେଖାଯିବ।"],
+    "Payment by Cash": ["नकद द्वारा भुगतान", "ନଗଦରେ ଦେୟ"],
+    "Payment by Card": ["कार्ड द्वारा भुगतान", "କାର୍ଡରେ ଦେୟ"],
+    "Amount payable (incl. GST)": ["देय राशि (GST सहित)", "ଦେୟ ରାଶି (GST ସହିତ)"],
+    "Final bill (incl. GST)": ["अंतिम बिल (GST सहित)", "ଅନ୍ତିମ ବିଲ୍ (GST ସହିତ)"],
+    "Subtotal": ["उप-योग", "ଉପ-ମୋଟ"],
+    "Discount": ["छूट", "ରିହାତି"],
+    "Kindly proceed to the Reception to settle your bill by Cash. Please present this screen to our cashier. Thank you for dining with us.": ["कृपया नकद द्वारा भुगतान के लिए रिसेप्शन पर पधारें और यह स्क्रीन कैशियर को दिखाएँ। हमारे साथ भोजन करने के लिए धन्यवाद।", "ଦୟାକରି ନଗଦରେ ଦେୟ ଦେବା ପାଇଁ ରିସେପ୍ସନକୁ ଆସନ୍ତୁ ଏବଂ ଏହି ସ୍କ୍ରିନ୍ କ୍ୟାସିଅରଙ୍କୁ ଦେଖାନ୍ତୁ। ଆମ ସହ ଭୋଜନ କରିଥିବାରୁ ଧନ୍ୟବାଦ।"],
+    "Kindly proceed to the Reception to settle your bill by Card. Please present this screen to our cashier. Thank you for dining with us.": ["कृपया कार्ड द्वारा भुगतान के लिए रिसेप्शन पर पधारें और यह स्क्रीन कैशियर को दिखाएँ। हमारे साथ भोजन करने के लिए धन्यवाद।", "ଦୟାକରି କାର୍ଡରେ ଦେୟ ଦେବା ପାଇଁ ରିସେପ୍ସନକୁ ଆସନ୍ତୁ ଏବଂ ଏହି ସ୍କ୍ରିନ୍ କ୍ୟାସିଅରଙ୍କୁ ଦେଖାନ୍ତୁ। ଆମ ସହ ଭୋଜନ କରିଥିବାରୁ ଧନ୍ୟବାଦ।"],
+    "Reception has been notified": ["रिसेप्शन को सूचित कर दिया गया है", "ରିସେପ୍ସନକୁ ଜଣାଯାଇଛି"],
+    "Choose your payment app. The amount is filled in for you.": ["अपना पेमेंट ऐप चुनें। राशि पहले से भरी हुई है।", "ଆପଣଙ୍କ ପେମେଣ୍ଟ ଆପ୍ ବାଛନ୍ତୁ। ରାଶି ଆପେ ଭରାଯାଇଛି।"],
+    "Other UPI app": ["अन्य UPI ऐप", "ଅନ୍ୟ UPI ଆପ୍"],
+    "Choose app": ["ऐप चुनें", "ଆପ୍ ବାଛନ୍ତୁ"],
+    "Pay": ["भुगतान", "ଦେୟ"],
+    "Cafe confirms": ["कैफ़े पुष्टि करेगा", "କାଫେ ନିଶ୍ଚିତ କରିବ"],
+    "Please keep this screen open.": ["कृपया यह स्क्रीन खुली रखें।", "ଦୟାକରି ଏହି ସ୍କ୍ରିନ୍ ଖୋଲା ରଖନ୍ତୁ।"],
+    "Change payment method": ["भुगतान का तरीका बदलें", "ଦେୟ ପଦ୍ଧତି ବଦଳାନ୍ତୁ"],
+    "Online payment isn't available at this café. Please pay at the Reception.": ["इस कैफ़े में ऑनलाइन भुगतान उपलब्ध नहीं है। कृपया रिसेप्शन पर भुगतान करें।", "ଏହି କାଫେରେ ଅନଲାଇନ୍ ଦେୟ ଉପଲବ୍ଧ ନାହିଁ। ଦୟାକରି ରିସେପ୍ସନରେ ଦେୟ ଦିଅନ୍ତୁ।"],
+    "You're all set and free to leave. We hope to see you again!": ["सब पूरा हो गया, आप जा सकते हैं। फिर पधारिएगा!", "ସବୁ ସମ୍ପୂର୍ଣ୍ଣ, ଆପଣ ଯାଇପାରିବେ। ପୁଣି ଆସିବେ!"],
+
     /* categories (preset list from the menu builder) */
     "Starters / Appetizers": ["स्टार्टर्स", "ଷ୍ଟାର୍ଟର୍"],
     "Soups": ["सूप", "ସୁପ୍"],
@@ -282,9 +309,9 @@
      3. STATE
      --------------------------------------------------------------- */
   var lang = "en";
-  try { var saved = localStorage.getItem(KEY); if (saved === "hi" || saved === "or") lang = saved; } catch (e) {}
+  try { var saved = localStorage.getItem(KEY); if (saved === "hi") lang = saved; } catch (e) {}
 
-  var menuNames = { hi: {}, or: {} };   // English name -> translated name
+  var menuNames = { hi: {} };   // English name -> translated name
   var menuSearch = {};                  // item id -> lowercase searchable text (all languages)
   var origText = new WeakMap();         // text node -> English text
   var shownText = new WeakMap();        // text node -> what we last wrote into it
@@ -311,12 +338,12 @@
   }
 
   function setMenu(items) {
-    menuNames = { hi: {}, or: {} };
+    menuNames = { hi: {} };
     menuSearch = {};
     (items || []).forEach(function (it) {
       if (!it) return;
-      var base = [String(it.name || "").toLowerCase(), String(it.name_hi || "").toLowerCase(), String(it.name_or || "").toLowerCase()];
-      ["hi", "or"].forEach(function (l) {
+      var base = [String(it.name || "").toLowerCase(), String(it.name_hi || "").toLowerCase()];
+      ["hi"].forEach(function (l) {
         var manual = it["name_" + l];
         var t = (manual && String(manual).trim()) || autoName(it.name, l);
         if (t && it.name) menuNames[l][it.name] = t;
@@ -521,7 +548,7 @@
   }
 
   function setLang(l) {
-    if (l !== "en" && l !== "hi" && l !== "or") l = "en";
+    if (l !== "en" && l !== "hi") l = "en";
     lang = l;
     try { localStorage.setItem(KEY, l); } catch (e) {}
     document.documentElement.setAttribute("lang", l);

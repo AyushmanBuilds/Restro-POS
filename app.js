@@ -1,6 +1,5 @@
 // ===================== FIREBASE SETUP =====================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-app.js";
-import { SEED_MENU_120 } from "./menu-seed-data.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   onAuthStateChanged, signOut, signInAnonymously
@@ -637,9 +636,9 @@ function attachListeners() {
 
     // UPI payments: guests who tapped "I've paid" (or webhook-confirmed payments) pop up for staff.
   unsubPayReqs = onSnapshot(query(collection(db, "restaurants", restoId, "payRequests"), where("ack", "==", false)), (snap) => {
-    const seen = new Set(payReqCache.filter(p => p.status === "claimed" || p.status === "paid").map(p => p.id + ":" + p.status));
+    const seen = new Set(payReqCache.filter(p => p.status === "claimed" || p.status === "paid" || p.status === "counter").map(p => p.id + ":" + p.status));
     payReqCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const hasNew = payReqCache.some(p => (p.status === "claimed" || p.status === "paid") && !seen.has(p.id + ":" + p.status));
+    const hasNew = payReqCache.some(p => (p.status === "claimed" || p.status === "paid" || p.status === "counter") && !seen.has(p.id + ":" + p.status));
     renderPayPopups();
     if (hasNew && payReqInitialDone) playNotifSound("payment");
     payReqInitialDone = true;
@@ -669,12 +668,18 @@ function payPopHost() {
   return h;
 }
 function renderPayPopups() {
-  const list = payReqCache.filter(p => p.ack === false && (p.status === "claimed" || p.status === "paid"));
+  const list = payReqCache.filter(p => p.ack === false && (p.status === "claimed" || p.status === "paid" || p.status === "counter" || p.status === "counter"));
   payPopHost().innerHTML = list.map(p => {
-    const label = `Table ${escapeHtml(p.tableName || "")} · ${money(p.amount || 0)}`;
+    const tbl = `Table ${escapeHtml(p.tableName || "")}`;
     const bill = p.billNo ? ` · Bill #${escapeHtml(p.billNo)}` : "";
-    if (p.status === "paid") return `<div class="pp paid" data-id="${p.id}"><div class="pp-ico">✅</div><div class="pp-main"><b>${label}</b><small>Payment received${bill}</small><div class="pp-act"><button class="yes" data-pp="ok">OK</button></div></div></div>`;
-    return `<div class="pp" data-id="${p.id}"><div class="pp-ico">💸</div><div class="pp-main"><b>${label}</b><small>Guest says they've paid by UPI${bill}. Check your UPI app or soundbox, then confirm.</small><div class="pp-act"><button class="yes" data-pp="yes">Received ✓</button><button class="no" data-pp="no">Not received</button></div></div></div>`;
+    const amt = money(p.amount || 0);
+    const head = `<b>${tbl}</b><div class="pp-amt">${amt}</div>`;
+    if (p.status === "paid") return `<div class="pp paid" data-id="${p.id}"><div class="pp-ico">✅</div><div class="pp-main">${head}<small>Payment received${bill}</small><div class="pp-act"><button class="yes" data-pp="ok">OK</button></div></div></div>`;
+    if (p.status === "counter") {
+      const m = escapeHtml((p.method || "cash").toUpperCase());
+      return `<div class="pp" data-id="${p.id}"><div class="pp-ico">🧾</div><div class="pp-main">${head}<small>Guest will pay <b>${m}</b> at reception${bill}. Collect exactly ${amt}, then confirm.</small><div class="pp-act"><button class="yes" data-pp="yes">Received ${amt} ✓</button></div></div></div>`;
+    }
+    return `<div class="pp" data-id="${p.id}"><div class="pp-ico">💸</div><div class="pp-main">${head}<small>Guest says they've paid by UPI${bill}. Check that your soundbox / UPI app announced <b>exactly ${amt}</b>, then confirm.</small><div class="pp-act"><button class="yes" data-pp="yes">Received ${amt} ✓</button><button class="no" data-pp="no">Not received / wrong amount</button></div></div></div>`;
   }).join("");
 }
 async function onPayPopClick(e) {
@@ -685,8 +690,9 @@ async function onPayPopClick(e) {
   const ref = doc(db, "restaurants", restoId, "payRequests", id);
   try {
     if (b.dataset.pp === "yes") {
-      await updateDoc(doc(db, "restaurants", restoId, "bills", id), { paymentMode: "upi", paymentStatus: "paid" });
-      await updateDoc(ref, { status: "paid", ack: true, paidAt: serverTimestamp(), confirmedBy: "staff" });
+      const pr = payReqCache.find(x => x.id === id) || {};
+      await updateDoc(doc(db, "restaurants", restoId, "bills", id), { paymentMode: ["cash", "card", "upi"].includes(pr.method) ? pr.method : "upi", paymentStatus: "paid" });
+      await updateDoc(ref, { status: "paid", ack: true, paidAt: serverTimestamp(), confirmedBy: "staff", confirmedAmount: Number(pr.amount) || 0 });
       toast("Payment confirmed");
     } else if (b.dataset.pp === "no") {
       await updateDoc(ref, { status: "awaiting", ack: true, note: "not_found" });
@@ -2455,35 +2461,6 @@ const SAMPLE_MENU_60 = [
 
 $("addItemBtn").onclick = () => openItemModal(null);
 
-// One-tap starter menu: adds the 120 ready-made items from menu-seed-data.js.
-// Items whose name already exists in your menu are skipped, so it is safe to press twice.
-async function loadSeedMenu() {
-  const btn = $("seedMenuBtn");
-  const have = new Set(menuCache.map(i => String(i.name || "").trim().toLowerCase()));
-  const fresh = SEED_MENU_120.filter(i => !have.has(i.name.toLowerCase()));
-  if (!fresh.length) { toast("All 120 sample items are already in your menu"); return; }
-  const ok = await showConfirm(
-    `${fresh.length} ready-made items (with Hindi and Odia names) will be added to your menu. Existing items are not touched.`,
-    { title: "Load sample menu?", okLabel: "Add items" }
-  );
-  if (!ok) return;
-  if (btn) btn.disabled = true;
-  try {
-    let done = 0;
-    for (let n = 0; n < fresh.length; n += 20) {
-      const chunk = fresh.slice(n, n + 20);
-      await Promise.all(chunk.map(i => addDoc(collection(db, "restaurants", restoId, "menu"), { ...i, available: true, upsellIds: [] })));
-      done += chunk.length;
-      if (btn) btn.textContent = `Adding… ${done}/${fresh.length}`;
-    }
-    toast(`Added ${done} items to your menu`);
-  } catch (e) {
-    console.error(e);
-    toast("Couldn't add all items — check your connection and press the button again (items already added are skipped)");
-  }
-  if (btn) { btn.disabled = false; btn.textContent = "Load 120 sample items"; }
-}
-if ($("seedMenuBtn")) $("seedMenuBtn").onclick = loadSeedMenu;
 $("itemModalClose").onclick = () => $("itemModal").classList.add("hidden");
 
 function openItemModal(item) {
@@ -2491,7 +2468,6 @@ function openItemModal(item) {
   $("itemModalTitle").textContent = item ? "Edit menu item" : "Add menu item";
   $("itmName").value = item ? item.name : "";
   $("itmNameHi").value = item?.name_hi || "";
-  $("itmNameOr").value = item?.name_or || "";
   $("itmAvailable").checked = item ? item.available !== false : true;
   renderTagPicker(item?.tags);
   populateCategoryDropdown(item ? item.category : (mbActiveCategory !== "All" ? mbActiveCategory : ""));
@@ -2650,7 +2626,7 @@ $("saveItemBtn").onclick = async () => {
     veg: getVegToggleValue(),
     basePrice: Math.max(0, parseFloat($("itmBasePrice").value) || 0),
     variants, addons, available: $("itmAvailable").checked,
-    name_hi: $("itmNameHi").value.trim(), name_or: $("itmNameOr").value.trim(), tags: getSelectedTags(),
+    name_hi: $("itmNameHi").value.trim(), tags: getSelectedTags(),
     upsellIds
   };
   if (editingItemId) {
@@ -2727,7 +2703,7 @@ function renderMenuBuilder() {
           <span class="mb-cat-pill">${escapeHtml(i.category)}</span>
           <button type="button" class="mb-86${i.available === false ? " off" : ""}" data-id="${i.id}" title="Tap to switch between Available and Sold out">${i.available === false ? "Sold out" : "Available"}</button>
           ${(i.tags || []).map(k => { const d = ITEM_TAGS.find(x => x[0] === k); return d ? `<span class="mb-tag${k === "nuts" ? " warn" : ""}">${d[1]}</span>` : ""; }).join("")}
-          ${i.name_hi ? `<span class="mb-lang-pill">हिं</span>` : ""}${i.name_or ? `<span class="mb-lang-pill">ଓଡ଼ି</span>` : ""}
+          ${i.name_hi ? `<span class="mb-lang-pill">हिं</span>` : ""}
           ${i.addons?.length ? `<span class="mb-addon-pill">${i.addons.length} add-on${i.addons.length === 1 ? "" : "s"}</span>` : ""}
         </div>
       </div>
@@ -4196,11 +4172,12 @@ $("generateBillBtn").onclick = async () => {
 
   // UPI pay request: the guest's phone picks this up after checkout (only when a UPI ID is set in Settings)
   let payPatch = {};
-  if (restoData.upiId && total > 0 && currentOrder?.id) {
+  if (total > 0 && currentOrder?.id) {
     try {
       const payAmt = Math.round(total * 100) / 100;
       await setDoc(doc(db, "restaurants", restoId, "payRequests", billRef.id), {
-        billNo, tableName: billData.tableName, amount: payAmt, upiId: restoData.upiId,
+        billNo, tableName: billData.tableName, amount: payAmt, upiId: restoData.upiId || "",
+        subtotal, discount, cgst, sgst, cgstPct, sgstPct,
         payeeName: restoData.name || "", status: "awaiting", ack: false,
         orderId: currentOrder.id, createdAt: serverTimestamp()
       });
