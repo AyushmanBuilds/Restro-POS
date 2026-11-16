@@ -113,6 +113,7 @@ function watchPayment(b) {
 const PAYM_KEY = `zs_paymethod_${restoId}_${tableName}`;
 let payMethod = null;
 try { payMethod = localStorage.getItem(PAYM_KEY) || null; } catch (e) {}
+const BILLREQ_KEY = `zs_billreq_${restoId}_${tableName}`;
 const payPushed = new Set();
 const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
@@ -218,13 +219,21 @@ function renderPayCards() {
 function chooseMethod(m) {
   payMethod = m;
   try { localStorage.setItem(PAYM_KEY, m); } catch (e) {}
-  const b = loadCheckout();
-  addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
-    tableName, floor: tableFloor, seatLabels: ((b && b.seats) || []).map(s => s.toLowerCase()),
-    type: "checkout", payMethod: m,
-    note: m === "upi" ? "Checkout — guest will pay by UPI · please generate the bill" : `Checkout — guest will pay by ${m.toUpperCase()} at reception`,
-    status: "pending", createdAt: serverTimestamp()
-  }).catch(e => console.warn("Couldn't notify staff of payment method", e));
+  // Cash / Card: nothing is sent — the guest walks to the Reception and staff prepare the bill there.
+  // UPI: ask staff (once) to prepare the GST bill so it shows on this phone quickly. This is a
+  // "checkout request" on the admin side, not a waiter call.
+  let already = false;
+  try { already = !!localStorage.getItem(BILLREQ_KEY); } catch (e) {}
+  if (m === "upi" && !already) {
+    const b = loadCheckout();
+    addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
+      tableName, floor: tableFloor, seatLabels: ((b && b.seats) || []).map(s => s.toLowerCase()),
+      type: "checkout", payMethod: "upi",
+      note: "Checkout — please prepare the GST bill (guest will pay by UPI)",
+      status: "pending", createdAt: serverTimestamp()
+    }).then(() => { try { localStorage.setItem(BILLREQ_KEY, "1"); } catch (e) {} })
+      .catch(e => console.warn("Couldn't send the bill request to staff", e));
+  }
   renderPayCards();
 }
 // Tell the POS which method the guest picked: cash/card -> reception popup for staff; upi -> clears that popup.
@@ -1344,7 +1353,7 @@ function finishCheckout() {
     orderIds: loadTracked().map(x => x.id)
   };
   try { localStorage.setItem(CHECKOUT_KEY, JSON.stringify(snap)); } catch (e) {}
-  payMethod = null; try { localStorage.removeItem(PAYM_KEY); } catch (e) {}
+  payMethod = null; try { localStorage.removeItem(PAYM_KEY); localStorage.removeItem(BILLREQ_KEY); } catch (e) {}
   sessionEnded = true;
 
   // shut down everything that could lead back to ordering
@@ -1354,13 +1363,6 @@ function finishCheckout() {
   hideUpsellPrompt();
   Object.keys(trackUnsubs).forEach(id => { try { trackUnsubs[id](); } catch (e) {} delete trackUnsubs[id]; });
   try { localStorage.removeItem(TRACK_KEY); } catch (e) {}
-
-  // heads-up for staff (best effort — the bill screen works even if this fails)
-  addDoc(collection(db, "restaurants", restoId, "waiterCalls"), {
-    tableName, floor: tableFloor, seatLabels: bill.seats.map(s => s.toLowerCase()),
-    type: "checkout", note: "Checkout — guest is choosing how to pay",
-    status: "pending", createdAt: serverTimestamp()
-  }).catch(e => console.warn("Couldn't notify staff of checkout", e));
 
   renderBill(snap);
   lockBackButton();

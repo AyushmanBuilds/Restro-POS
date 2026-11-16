@@ -72,6 +72,7 @@ let expensesCache = [];
 let reservationsCache = [];
 let waitlistCache = [];
 let customerOrdersCache = [];
+let checkoutReqCache = []; // "Table X is checking out — prepare the GST bill" requests (guest chose UPI)
 let waiterCallsCache = []; // pending "call waiter" requests from the QR ordering pages
 let unsubPayReqs = null, payReqCache = [], payReqInitialDone = false;   // UPI payment claims from guests
 let editingExpenseId = null;
@@ -510,6 +511,7 @@ onAuthStateChanged(auth, async (user) => {
     if (unsubWaitlist) unsubWaitlist();
     if (unsubCustomerOrders) unsubCustomerOrders();
     if (unsubWaiterCalls) unsubWaiterCalls();
+    checkoutReqCache = [];
     if (unsubPayReqs) { unsubPayReqs(); unsubPayReqs = null; payReqCache = []; payReqInitialDone = false; }
     setStaffUnlocked(false); // sign-out always re-locks the staff area
     if (unsubRangeAttendance) unsubRangeAttendance();
@@ -647,10 +649,13 @@ function attachListeners() {
   // "Call waiter" requests customers send from the QR ordering page.
   const wcRef = collection(db, "restaurants", restoId, "waiterCalls");
   unsubWaiterCalls = onSnapshot(query(wcRef, where("status", "==", "pending")), (snap) => {
-    const prevIds = new Set(waiterCallsCache.map(o => o.id));
-    waiterCallsCache = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+    const prevIds = new Set([...waiterCallsCache, ...checkoutReqCache].map(o => o.id));
+    const allCalls = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+    // checkout requests are NOT waiter calls: they go to their own panel and alert
+    checkoutReqCache = allCalls.filter(o => o.type === "checkout");
+    waiterCallsCache = allCalls.filter(o => o.type !== "checkout");
     renderDashboardLive();
-    const hasNewArrival = waiterCallsCache.some(o => !prevIds.has(o.id));
+    const hasNewArrival = allCalls.some(o => !prevIds.has(o.id));
     if ($("view-qrorder").classList.contains("active")) renderQrOrderingView();
     if (hasNewArrival && waiterCallsInitialLoadDone) { playNotifSound("waiter"); notifyTab("qrorder"); }
     waiterCallsInitialLoadDone = true;
@@ -1000,6 +1005,7 @@ function renderDashboardLive() {
   if (cooking) bits.push(`${cooking} order${cooking === 1 ? "" : "s"} in the kitchen`);
   line.textContent = bits.length ? bits.join("  ·  ") : "All quiet right now — the floor is ready for guests.";
   const out = [];
+  if (checkoutReqCache.length) out.push(`<button class="dx-chip hot" data-go="qrorder"><i></i>${checkoutReqCache.length} table${checkoutReqCache.length === 1 ? "" : "s"} checking out</button>`);
   if (waiterCallsCache.length) out.push(`<button class="dx-chip hot" data-go="qrorder"><i></i>${waiterCallsCache.length} waiter call${waiterCallsCache.length === 1 ? "" : "s"}</button>`);
   if (customerOrdersCache.length) out.push(`<button class="dx-chip hot" data-go="qrorder"><i></i>${customerOrdersCache.length} QR order${customerOrdersCache.length === 1 ? "" : "s"} waiting</button>`);
   const resToday = reservationsCache.filter(r => r.dateStr === todayStr() && r.status !== "cancelled" && r.status !== "completed").length;
@@ -1308,6 +1314,7 @@ setInterval(() => { if ($("view-kds").classList.contains("active")) renderKds();
 // the last pending item is dealt with -- on every device at once.
 const ALERT_KINDS = [
   { key: "waiter", one: "waiter call", many: "waiter calls", view: "qrorder" },
+  { key: "checkout", one: "table checking out — prepare bill", many: "tables checking out — prepare bills", view: "qrorder" },
   { key: "qrorder", one: "order to approve", many: "orders to approve", view: "qrorder" },
   { key: "kds", one: "new kitchen ticket", many: "new kitchen tickets", view: "kds" },
 ];
@@ -1318,6 +1325,7 @@ function alertRepeatOn(kind) { return localStorage.getItem("alertRepeat_" + kind
 function alertCounts() {
   return {
     waiter: waiterCallsCache.length,
+    checkout: checkoutReqCache.length,
     qrorder: customerOrdersCache.length,
     // a ticket is "new" until the kitchen taps Start preparing
     kds: kdsOrders().filter(o => (o.kitchenStatus || "new") === "new").length,
@@ -1803,6 +1811,44 @@ function renderWaiterCallsPanel() {
     </div>`).join("");
 }
 
+function renderCheckoutPanel() {
+  const el = $("qrCheckoutList");
+  if (!el) return;
+  const cnt = $("qrCheckoutCount");
+  cnt.textContent = checkoutReqCache.length ? `${checkoutReqCache.length} waiting` : "";
+  cnt.classList.toggle("hot", checkoutReqCache.length > 0);
+  if (!checkoutReqCache.length) {
+    el.innerHTML = `<div class="qx-empty"><span class="qx-empty-ico">${SQ(SQP.check)}</span><b>No tables are waiting for a bill.</b><span>When a guest checks out and chooses UPI, the table appears here.</span></div>`;
+    return;
+  }
+  el.innerHTML = checkoutReqCache.map(r => `
+    <div class="qx-call" data-id="${r.id}">
+      <span class="qx-call-ico">${SQ(SQP.inbox)}</span>
+      <div class="qx-call-main">
+        <b>${t("Table")} ${escapeHtml(r.tableName)}${r.floor ? " · " + escapeHtml(r.floor) : ""}${r.seatLabels?.length ? " · " + t("Seat") + " " + seatLabelsText(r.seatLabels) : ""} is checking out</b>
+        <small>Please prepare the GST bill · paying by UPI · ${qrWaitText(qrWaitMins(r))}</small>
+      </div>
+      <button type="button" class="qx-btn ok" data-act="open-bill" data-id="${r.id}">Prepare bill</button>
+      <button type="button" class="qx-btn no" data-act="dismiss-checkout" data-id="${r.id}">Dismiss</button>
+    </div>`).join("");
+}
+$("qrCheckoutList").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const r = checkoutReqCache.find(x => x.id === b.dataset.id);
+  if (!r) return;
+  if (b.dataset.act === "open-bill") {
+    const tbl = tablesCache.find(x => x.name === r.tableName);
+    if (!tbl) { toast("Couldn't find that table — open it from the Tables screen"); return; }
+    showView("tables");
+    openSeatPicker(tbl.id);
+    return;
+  }
+  b.disabled = true;
+  try { await updateDoc(doc(db, "restaurants", restoId, "waiterCalls", r.id), { status: "resolved" }); }
+  catch (err) { console.error(err); toast("Couldn't dismiss that request. Try again."); b.disabled = false; }
+});
+
 function renderQrIncoming() {
   const el = $("qrIncomingList");
   if (!el) return;
@@ -1873,11 +1919,12 @@ function renderQrOrderingView() {
   renderQrStats();
   renderQrTableGrid();
   renderWaiterCallsPanel();
+  renderCheckoutPanel();
   renderQrIncoming();
 }
 // keep "waiting for 3 min" labels fresh while the screen is open
 setInterval(() => {
-  if ($("view-qrorder")?.classList.contains("active") && (customerOrdersCache.length || waiterCallsCache.length)) {
+  if ($("view-qrorder")?.classList.contains("active") && (customerOrdersCache.length || waiterCallsCache.length || checkoutReqCache.length)) {
     renderWaiterCallsPanel(); renderQrIncoming();
   }
 }, 20000);
@@ -2964,7 +3011,7 @@ function staffCardHtml(s, idx, today, weekDays, monthPrefix) {
       ${shift && onShift ? `<span>${shift}</span>` : ""}
       ${tenure ? `<span>${SQ(SQP.user)}${tenure}</span>` : ""}
     </div>` : ""}
-    ${digits ? `<div class="sf-contact"><a href="tel:+${digits}">${SQ(SQP.phone)}Call</a><a class="wa" href="https://wa.me/${digits}" target="_blank" rel="noopener">${SQ(SQP.chat)}WhatsApp</a></div>` : ""}
+    ${digits ? `<div class="sf-contact"><a href="tel:+${digits}">${SQ(SQP.phone)}Call</a><a class="wa" href="whatsapp://send?phone=${digits}">${SQ(SQP.chat)}WhatsApp</a></div>` : ""}
     <div class="sf-today">
       <div class="sf-today-row"><b>${meta.label} today</b><small>${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</small></div>
       <div class="sf-seg" role="group" aria-label="Today's attendance for ${escapeHtml(s.name)}">${seg}</div>
@@ -4185,6 +4232,9 @@ $("generateBillBtn").onclick = async () => {
     } catch (e) { console.warn("UPI pay request not created", e); }
   }
 
+  // the bill is ready: clear this table's "checking out" request
+  checkoutReqCache.filter(r => r.tableName === activeTable.name).forEach(r => updateDoc(doc(db, "restaurants", restoId, "waiterCalls", r.id), { status: "resolved" }).catch(() => {}));
+
   // close this seat group's order — other seat groups on the same table (if
   // any) are untouched and keep running independently
   if (currentOrder?.id) {
@@ -4344,9 +4394,7 @@ function shareBillOnWhatsApp(b) {
   lines.push("", "Thank you. We hope to see you again!");
 
   const message = lines.join("\n");
-  const fullUrl = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
   const shortMsg = `Thank you for visiting ${restaurant} ${happy}\nYour bill no. ${cleanWhatsAppText(b.billNo)} (${money(b.total)}) is attached.`;
-  const chatUrl = `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(shortMsg)}`;
 
   // 1) Build the bill as an image and put it on the clipboard (no file saved).
   //    Done first, inside the click, so the browser allows the clipboard write.
@@ -4358,21 +4406,35 @@ function shareBillOnWhatsApp(b) {
     clipPromise = Promise.reject(err);
   }
 
-  // 2) Open the customer's chat straight away (must happen inside the click too).
-  const waWindow = window.open(chatUrl, "_blank");
-  if (!waWindow) {
-    toast("Allow pop-ups to open WhatsApp with the bill");
-    return;
-  }
+  // 2) Open the customer's chat in the WhatsApp app installed on this device.
+  openWhatsAppApp(phone, shortMsg);
 
   clipPromise
     .then(() => toast("Bill image copied ✓  In WhatsApp: click the message box, press Ctrl+V, then Enter.", 9000))
-    .catch(async (err) => {
+    .catch((err) => {
       console.error("Bill image copy failed", err);
-      // Fallback: same as before — send the bill as a text message.
-      try { waWindow.location = fullUrl; } catch (e) { /* ignore */ }
+      // Fallback: send the bill as a text message instead.
+      openWhatsAppApp(phone, message);
       toast("Couldn't copy the bill image, so the bill is sent as text. Press Enter in WhatsApp.", 6000);
     });
+}
+
+// Opens the WhatsApp app installed on this device (Windows / Mac desktop app or the phone app).
+// It never opens WhatsApp Web.
+function openWhatsAppApp(phone, text) {
+  const url = `whatsapp://send?phone=${phone}&text=${encodeURIComponent(text)}`;
+  let appOpened = false;
+  const onBlur = () => { appOpened = true; };
+  window.addEventListener("blur", onBlur, { once: true });
+  const a = document.createElement("a");
+  a.href = url; a.style.display = "none";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => {
+    window.removeEventListener("blur", onBlur);
+    if (!appOpened && document.visibilityState === "visible") {
+      toast("WhatsApp didn't open. Please install WhatsApp for Windows / Mac (or use the phone app) on this device.", 7000);
+    }
+  }, 3000);
 }
 
 // Draws the bill as a clean receipt-style PNG (returns a Promise<Blob>).
